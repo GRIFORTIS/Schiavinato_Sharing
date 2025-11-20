@@ -87,7 +87,7 @@ A 24-word BIP39 mnemonic is treated as a vector of 24 integers $(w_1, ..., w_{24
 For a $k$-of-$n$ scheme, the Schiavinato Cipher defines, for each secret, an independent polynomial of degree at most $k-1$:
 
 $$
-f(x) = a_0 + a_1 x + ... + a_{k-1} x^{k-1} \pmod{2053},
+f(x) = a_0 + a_1 x + ... + a_{k-1} x^{k-1} \quad (\text{mod } 2053),
 $$
 
 where:
@@ -102,7 +102,7 @@ This process is repeated independently for every secret used by the scheme:
 - 1 **master-checksum secret**, defined as
 
   $$
-  M = \sum_{i=1}^{24} w_i \pmod{2053},
+  M = \sum_{i=1}^{24} w_i \quad (\text{mod } 2053),
   $$
 
   which serves as a global checksum over all 24 words.
@@ -120,7 +120,7 @@ For each secret $s \in {0, ..., 2052}$:
 3. **Evaluate the polynomial**: For each share index $x \in {1, 2, ..., n}$, compute
 
    $$
-   y = f(x) = a_0 + a_1 x + ... + a_{k-1} x^{k-1} \pmod{2053}.
+   y = f(x) = a_0 + a_1 x + ... + a_{k-1} x^{k-1} \quad (\text{mod } 2053).
    $$
 
    The resulting pair $(x, y)$ is the share for that secret at index $x$.
@@ -136,13 +136,13 @@ Although polynomial evaluation is repetitive, the arithmetic itself is straightf
 Recovery in the Schiavinato Cipher relies on Lagrange interpolation in $GF(2053)$. Given any $k$ distinct shares $(x_j, y_j)$ for a single secret, the constant term $a_0$ of the underlying polynomial can be expressed as
 
 $$
-a_0 = f(0) = \sum_{j=1}^{k} \gamma_j y_j \pmod{2053},
+a_0 = f(0) = \sum_{j=1}^{k} \gamma_j y_j \quad (\text{mod } 2053),
 $$
 
 where the Lagrange coefficients $\gamma_j$ depend only on the share indices $x_1, ..., x_k$:
 
 $$
-\gamma_j = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{x_i}{x_i - x_j} \pmod{2053}.
+\gamma_j = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{x_i}{x_i - x_j} \quad (\text{mod } 2053).
 $$
 
 In principle, a user could compute these coefficients by hand using modular inverses. In practice, the Schiavinato Cipher treats them as **non-secret metadata**:
@@ -168,7 +168,7 @@ The Schiavinato Cipher uses a purely arithmetic, two-layer checksum system:
 1. **Row-level checksums (Shamir-shared)**: The 24 words are arranged into 8 rows of 3 words each. For row $r$ with word indices $(w_{r,1}, w_{r,2}, w_{r,3})$, define a checksum secret
 
    $$
-   c_r = (w_{r,1} + w_{r,2} + w_{r,3}) \pmod{2053}.
+   c_r = (w_{r,1} + w_{r,2} + w_{r,3}) \quad (\text{mod } 2053).
    $$
 
    Each $c_r$ is then treated as an additional secret and shared with its own independent Shamir polynomial over $GF(2053)$, exactly as for the word indices. Thus, for each share index $x$, the printed worksheet row contains four values: three word shares and one checksum share.
@@ -176,7 +176,7 @@ The Schiavinato Cipher uses a purely arithmetic, two-layer checksum system:
    During recovery, for each row the user:
 
    - uses Lagrange interpolation to recover $(w_{r,1}, w_{r,2}, w_{r,3})$, and $c_r$ from their $k$ shares;
-   - computes $\tilde{c}_r = (w_{r,1} + w_{r,2} + w_{r,3}) \pmod{2053}$ by hand; and
+   - computes $\tilde{c}_r = (w_{r,1} + w_{r,2} + w_{r,3}) \quad (\text{mod } 2053)$ by hand; and
    - verifies that $\tilde{c}_r = c_r$.
 
    If this equality fails, there is an arithmetic error affecting at least one of the four recovered values in that row. Rows are independent, so errors are localized to specific rows.
@@ -184,7 +184,7 @@ The Schiavinato Cipher uses a purely arithmetic, two-layer checksum system:
 2. **Master Verification Number (Shamir-shared)**: In addition to the row-level checks, the scheme defines a master-checksum secret
 
    $$
-   M = \sum_{i=1}^{24} w_i \pmod{2053},
+   M = \sum_{i=1}^{24} w_i \quad (\text{mod } 2053),
    $$
 
    computed once from the original 24 words before sharding. This value is treated as a separate secret and shared by its own independent Shamir polynomial over $GF(2053)$, producing one master-checksum share value on each worksheet.
@@ -192,7 +192,7 @@ The Schiavinato Cipher uses a purely arithmetic, two-layer checksum system:
    After all 24 word indices have been recovered, the user performs two calculations:
 
    - uses Lagrange interpolation on the master-checksum shares from their $k$ worksheets to recover $M$, and
-   - separately computes the master sum $\tilde{M} = \sum_{i=1}^{24} w_i \pmod{2053}$ from the recovered words.
+   - separately computes the master sum $\tilde{M} = \sum_{i=1}^{24} w_i \quad (\text{mod } 2053)$ from the recovered words.
 
    If $\tilde{M} \neq M$, then at least one row contains undetected errors and must be rechecked.
 
@@ -224,7 +224,7 @@ This consistent layout allows the user to treat each row as a self-contained uni
 A key enabler of manual recovery is the use of pre-computed Lagrange coefficients. For fixed share indices $(x_1, ..., x_k)$, each coefficient $\gamma_j$ is defined as
 
 $$
-\gamma_j = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{x_i}{x_i - x_j} \pmod{2053}.
+\gamma_j = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{x_i}{x_i - x_j} \quad (\text{mod } 2053).
 $$
 
 These coefficients depend only on the chosen subset of share indices, not on the secret values or the random coefficients. Once computed for a given subset, they can be used for every secret associated with those indices.
@@ -503,7 +503,7 @@ These operations are sufficient for evaluating polynomials and performing the we
 When the modulus $p$ is prime, the set ${0, 1, ..., p-1}$ with addition and multiplication modulo $p$ forms a **finite field** $GF(p)$. In a field, every non-zero element has a multiplicative inverse:
 
 $$
-a \cdot a^{-1} \equiv 1 \pmod{p}.
+a \cdot a^{-1} \equiv 1 \quad (\text{mod } p).
 $$
 
 Division by a non-zero element $a$ is defined as multiplication by its inverse $a^{-1}$. Finding inverses in practice can be done using the extended Euclidean algorithm, but this process is more involved than simple addition or multiplication.
@@ -535,7 +535,7 @@ Let $(x_1, ..., x_k)$ be distinct elements of $GF(2053)$, and let $y_j = f(x_j)$
 The Lagrange basis polynomials are defined as:
 
 $$
-\ell_j(x) = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{x - x_i}{x_j - x_i} \pmod{2053}.
+\ell_j(x) = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{x - x_i}{x_j - x_i} \quad (\text{mod } 2053).
 $$
 
 Each $\ell_j(x)$ has the property that:
@@ -562,13 +562,13 @@ $$
 Define the Lagrange coefficients
 
 $$
-\gamma_j = \ell_j(0) = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{0 - x_i}{x_j - x_i} = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{-x_i}{x_j - x_i} \pmod{2053}.
+\gamma_j = \ell_j(0) = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{0 - x_i}{x_j - x_i} = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{-x_i}{x_j - x_i} \quad (\text{mod } 2053).
 $$
 
 Then
 
 $$
-a_0 = f(0) = \sum_{j=1}^{k} \gamma_j y_j \pmod{2053}.
+a_0 = f(0) = \sum_{j=1}^{k} \gamma_j y_j \quad (\text{mod } 2053).
 $$
 
 This is precisely the formula used by the Schiavinato Cipher. Once the $\gamma_j$ corresponding to a particular subset of share indices have been computed, recovery of the secret reduces to a weighted sum.
