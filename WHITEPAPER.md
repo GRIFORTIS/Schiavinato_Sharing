@@ -1,11 +1,11 @@
-### **Title:** The Schiavinato Cipher: An Arithmetic Approach to Secret Sharing
+### **Title:** The Schiavinato BIP39 Mnemonic Sharing Scheme: An Arithmetic Approach to Secret Sharing
 ### **Subtitle:** A Pencil-and-Paper Methodology for Resilient BIP39 Inheritance and Disaster Recovery
 
 ---
 
 ### **Abstract**
 
-The Schiavinato Cipher is a threshold secret-sharing scheme for BIP39 mnemonics, designed explicitly for recovery with pencil and paper. It instantiates Shamir's Secret Sharing over the prime field $GF(2053)$, operating directly on BIP39 word indices rather than on the underlying binary entropy. Each word index is sharded independently by a random polynomial, and additional checksum secrets provide robust detection of human arithmetic errors during manual recovery. By pre-computing Lagrange coefficients for common threshold schemes, the cipher reduces recovery to a sequence of additions and multiplications modulo 2053. A reference implementation architecture by GRIFORTIS is outlined, based on an auditable, offline HTML tool and MIT-licensed libraries for Python and JavaScript, enabling independent verification and potential integration while preserving the security guarantees of standard Shamir secret sharing.
+The Schiavinato BIP39 Mnemonic Sharing Scheme (or **Schiavinato Sharing** for short) is a threshold secret-sharing scheme for BIP39 mnemonics, designed explicitly for recovery with pencil and paper. It instantiates Shamir's Secret Sharing over the prime field $GF(2053)$, operating directly on BIP39 word indices rather than on the underlying binary entropy. Each word index is sharded independently by a random polynomial, and additional checksum secrets provide robust detection of human arithmetic errors during manual recovery. By pre-computing Lagrange coefficients for common threshold schemes, the scheme reduces recovery to a sequence of additions and multiplications modulo 2053. A reference implementation architecture by GRIFORTIS is outlined, based on an auditable, offline HTML tool and MIT-licensed libraries for Python and JavaScript, enabling independent verification and potential integration while preserving the security guarantees of standard Shamir secret sharing.
 
 ---
 
@@ -29,20 +29,20 @@ In all these cases, the recovery procedure is ultimately a computational protoco
 
 #### 1.3 A Non-Computational Approach
 
-The Schiavinato Cipher is designed to remove this dependency on trusted electronics at the point of recovery. The central design goals are:
+Schiavinato Sharing is designed to remove this dependency on trusted electronics at the point of recovery. The central design goals are:
 
 - **Human executability**: All required operations for sharding and recovery can be performed with pencil, paper, and basic arithmetic skills.
 - **Cryptographic soundness**: Security should reduce to that of standard Shamir secret sharing in a well-understood field.
 - **BIP39 compatibility**: The scheme should accept and output standard BIP39 mnemonics, without requiring modified wordlists or custom checksum rules.
 - **Auditability and simplicity**: The construction should be simple enough to be understood, audited, and reimplemented by third parties, and the reference implementations must be fully offline and open source.
 
-To achieve these goals, the Schiavinato Cipher transposes Shamir's Secret Sharing from extension fields $GF(2^n)$ to a small prime field $GF(2053)$ and operates directly on BIP39 word indices. It further introduces a two-layer arithmetic checksum mechanism to detect human calculation errors during manual recovery.
+To achieve these goals, Schiavinato Sharing transposes Shamir's Secret Sharing from extension fields $GF(2^n)$ to a small prime field $GF(2053)$ and operates directly on BIP39 word indices. It further introduces a two-layer arithmetic checksum mechanism to detect human calculation errors during manual recovery.
 
 ---
 
 ### **2. Background: The Mathematical Foundations**
 
-The Schiavinato Cipher is a concrete application of established cryptographic principles. It does not introduce a new primitive; instead, it adapts Shamir's Secret Sharing to a setting where every operation can, in principle, be performed by hand.
+Schiavinato Sharing is a concrete application of established cryptographic principles. It does not introduce a new primitive; instead, it adapts Shamir's Secret Sharing to a setting where every operation can, in principle, be performed by hand.
 
 This section sketches the relevant mathematical background. Readers who require additional detail can consult the appendices and the referenced literature.
 
@@ -50,11 +50,11 @@ This section sketches the relevant mathematical background. Readers who require 
 - **Modular arithmetic**: Arithmetic performed "modulo" a fixed number $p$, where values are always taken in the range $\{0, 1, ..., p-1\}$. Addition and multiplication are defined as usual, followed by reduction modulo $p$. When $p$ is prime, every non-zero value has a multiplicative inverse, which enables division (see **Appendix B**).
 - **Lagrange interpolation**: A method to reconstruct a polynomial of degree at most $k-1$ from $k$ distinct points. For Shamir's scheme, we are primarily interested in the constant term (the secret). By pre-computing the relevant Lagrange coefficients for a given set of share indices, reconstruction reduces to a weighted sum of the share values (see **Appendix C**).
 
-By working over a prime field $GF(p)$ with a carefully chosen prime $p$, the Schiavinato Cipher ensures that all of the above can be instantiated with straightforward integer arithmetic.
+By working over a prime field $GF(p)$ with a carefully chosen prime $p$, Schiavinato Sharing ensures that all of the above can be instantiated with straightforward integer arithmetic.
 
 ---
 
-### **3. The Schiavinato Cipher: An Arithmetic Approach to Secret Sharing**
+### **3. Schiavinato Sharing: An Arithmetic Approach to Secret Sharing**
 
 > **Note:** While the examples in this paper assume a 24-word BIP39 mnemonic, the same construction applies, mutatis mutandis, to 12, 15, 18, and 21-word phrases.
 
@@ -64,11 +64,11 @@ Standard implementations of Shamir's Secret Sharing for wallet backups, such as 
 
 Moreover, entropy-based schemes require explicit conversion between the binary entropy and the mnemonic words, including verification of the BIP39 checksum bits. Reversing this process by hand—mapping words to indices, expanding to a bitstring, separating entropy from checksum, and possibly re-encoding is beyond what can reasonably be expected in a manual recovery scenario.
 
-In contrast, the Schiavinato Cipher operates directly on BIP39 word indices in a small prime field. Recovery never requires manipulating bits or recomputing the BIP39 checksum by hand. All visible operations are integer additions and multiplications modulo a fixed prime.
+In contrast, Schiavinato Sharing operates directly on BIP39 word indices in a small prime field. Recovery never requires manipulating bits or recomputing the BIP39 checksum by hand. All visible operations are integer additions and multiplications modulo a fixed prime.
 
 #### 3.2 Methodology: Independent Polynomials in a Prime Field
 
-The core innovation of the Schiavinato Cipher is to instantiate Shamir's Secret Sharing over the prime field $GF(p)$ with
+The core innovation of Schiavinato Sharing is to instantiate Shamir's Secret Sharing over the prime field $GF(p)$ with
 
 $$
 p = 2053,
@@ -84,7 +84,7 @@ The rationale for this choice is threefold:
 
 A 24-word BIP39 mnemonic is treated as a vector of 24 integers $(w_1, ..., w_{24})$, each in $\{0, ..., 2047\}$. While these indices are not 24 fully independent 11-bit variables—because of the BIP39 checksum and the way entropy is mapped to words—they collectively encode a 256-bit entropy value plus checksum bits. For the purposes of the security analysis, it is sufficient to note that the effective keyspace remains on the order of $2^{256}$.
 
-For a $k$-of-$n$ scheme, the Schiavinato Cipher defines, for each secret, an independent polynomial of degree at most $k-1$:
+For a $k$-of-$n$ scheme, Schiavinato Sharing defines, for each secret, an independent polynomial of degree at most $k-1$:
 
 $$
 f(x) = a_0 + a_1 x + ... + a_{k-1} x^{k-1} \quad (\text{mod } 2053)
@@ -116,7 +116,7 @@ Shares can be generated by software or entirely by hand. The reference GRIFORTIS
 For each secret $s \in \{0, ..., 2052\}$:
 
 1. **Define the secret**: Set $a_0 = s$ in $GF(2053)$.
-2. **Sample random coefficients**: For a $k$-of-$n$ scheme, sample $(a_1, ..., a_{k-1})$ as cryptographically secure random integers from $\{0, ..., 2052\}$. The source of randomness may be an offline computer, a hardware entropy source, or a carefully designed physical procedure (e.g., dice). The paper assumes the availability of cryptographically secure randomness but does not prescribe a specific mechanism.
+2. **Sample random coefficients**: For a $k$-of-$n$ scheme, sample $(a_1, ..., a_{k-1})$ as cryptographically secure random integers from $\{0, ..., 2052\}$. The source of randomness may be an offline computer, a hardware entropy source, or a carefully designed physical procedure (e.g., dice). The paper assumes the availability of cryptographically secure randomness but does not prescribe a specific mechanism; in the reference implementations this randomness is obtained from the host platform's CSPRNG (for example, `window.crypto.getRandomValues` in the HTML tool and `os.urandom` in the Python library), while fully manual workflows are expected to follow a published dice-based procedure that maps unbiased rolls to integers in $\{0, ..., 2052\}$.
 3. **Evaluate the polynomial**: For each share index $x \in \{1, 2, ..., n\}$, compute
 
    $$
@@ -133,7 +133,7 @@ Although polynomial evaluation is repetitive, the arithmetic itself is straightf
 
 #### 3.4 The Manual Recovery Process
 
-Recovery in the Schiavinato Cipher relies on Lagrange interpolation in $GF(2053)$. Given any $k$ distinct shares $(x_j, y_j)$ for a single secret, the constant term $a_0$ of the underlying polynomial can be expressed as
+Recovery in Schiavinato Sharing relies on Lagrange interpolation in $GF(2053)$. Given any $k$ distinct shares $(x_j, y_j)$ for a single secret, the constant term $a_0$ of the underlying polynomial can be expressed as
 
 $$
 a_0 = f(0) = \sum_{j=1}^{k} \gamma_j y_j \quad (\text{mod } 2053)
@@ -145,7 +145,7 @@ $$
 \gamma_j = \prod_{\substack{i=1 \\ i \neq j}}^{k} \frac{x_i}{x_i - x_j} \quad (\text{mod } 2053)
 $$
 
-In principle, a user could compute these coefficients by hand using modular inverses. In practice, the Schiavinato Cipher treats them as **non-secret metadata**:
+In principle, a user could compute these coefficients by hand using modular inverses. In practice, Schiavinato Sharing treats them as **non-secret metadata**:
 
 - For common $k$-of-$n$ schemes (e.g., 2-of-3, 2-of-4, 3-of-5), the reference documentation includes pre-computed Lagrange coefficients for all subsets of indices (Section 3.8).
 - For other schemes, the coefficients can be computed on demand using a simple script or calculator. Since they contain no secret information, this can be done on any convenient device.
@@ -157,13 +157,15 @@ The manual recovery workflow for a single secret is therefore:
 3. For each share $j$, multiply the share value $y_j$ by $\gamma_j$ modulo 2053.
 4. Sum the products and reduce modulo 2053 to obtain the recovered secret $a_0$.
 
+In typical workflows, once all 24 word indices have been recovered and checked, users also validate the resulting BIP39 mnemonic in a standard wallet; in strictly no-electronics scenarios, the row-level and master checks are intended to stand in for an explicit BIP39 checksum computation.
+
 For a 24-word mnemonic with checksums, the user repeats this procedure for each of the 33 secrets, but in practice the worksheet structure (Section 3.6) allows recovery to proceed row by row, with immediate consistency checks, followed by a final master-checksum verification.
 
 #### 3.5 Integrity and Error Detection: The Two-Layer Checksum
 
 Performing dozens of modular multiplications and additions by hand creates ample opportunity for arithmetic mistakes. Because independent word-level sharing destroys the original BIP39 checksum relationship between words, an additional integrity mechanism is required to detect such errors.
 
-The Schiavinato Cipher uses a purely arithmetic, two-layer checksum system:
+Schiavinato Sharing uses a purely arithmetic, two-layer checksum system:
 
 1. **Row-level checksums (Shamir-shared)**: The 24 words are arranged into 8 rows of 3 words each. For row $r$ with word indices $(w_{r,1}, w_{r,2}, w_{r,3})$, define a checksum secret
 
@@ -196,13 +198,13 @@ The Schiavinato Cipher uses a purely arithmetic, two-layer checksum system:
 
    If $\tilde{M} \neq M$, then at least one row contains undetected errors and must be rechecked.
 
-Under a simple model in which an incorrect set of recovered values behaves like a random element of $GF(2053)$, the chance that a wrong triple $(w_{r,1}, w_{r,2}, w_{r,3})$ together with a wrong $c_r$ still satisfies the row equation is at most $1/2053$. The chance that such errors also preserve the master sum is at most another factor of $1/2053$. For eight rows plus the master check, the overall probability that arbitrary arithmetic mistakes pass all checks is therefore bounded above by roughly $(1/2053)^{9}$, which is negligible for any practical purpose.
+Under a simple model in which an incorrect set of recovered values behaves like a random element of $GF(2053)$, the chance that a wrong triple $(w_{r,1}, w_{r,2}, w_{r,3})$ together with a wrong $c_r$ still satisfies the row equation is at most $1/2053$, and the chance that such errors also preserve the master sum is at most another factor of $1/2053$. Under an additional independence assumption across rows, this suggests an overall error-escape probability on the order of $(1/2053)^{9}$ for eight rows plus the master check; even without relying on that assumption, the per-row-plus-master failure probability of at most $1/2053^2$ is already negligible for any practical purpose.
 
 From the user's perspective, this behavior justifies the informal statement that "there is no realistic way for arithmetic errors to pass through all row and master checks unnoticed," while still providing a quantitative bound suitable for formal analysis.
 
 #### 3.6 The Share Format and Recovery Worksheet
 
-The Schiavinato Cipher is not merely a mathematical construction but also a specification for the layout of human-usable share documents.
+Schiavinato Sharing is not merely a mathematical construction but also a specification for the layout of human-usable share documents.
 
 Each individual share document (corresponding to a fixed index $x \in \{1, ..., n\}$) contains:
 
@@ -214,7 +216,7 @@ Each individual share document (corresponding to a fixed index $x \in \{1, ..., 
   - **Master-checksum share**: the numeric value corresponding to the evaluation of the master-checksum polynomial at $x$, used only during the final verification step.
 
 - **Body table**: typically formatted as 8 rows and 4 columns:
-  - **Columns 1–3**: for each row $r$, the three share values corresponding to $(w_{r,1}, w_{r,2}, w_{r,3})$. Each numeric value in $\{0, ..., 2052\}$ is accompanied by its BIP39 mnemonic word if it is in the range 0–2047. For values 2048–2052 (which do not correspond to BIP39 words), the numeric value is repeated in the mnemonic field to avoid ambiguity.
+  - **Columns 1–3**: for each row $r$, the three share values corresponding to $(w_{r,1}, w_{r,2}, w_{r,3})$. Each numeric value in $\{0, ..., 2052\}$ is accompanied by its BIP39 mnemonic word if it is in the range 0–2047. For values 2048–2052 (which do not correspond to BIP39 words), the mnemonic column prints the numeric value verbatim rather than any word, and these values are never used directly in a final mnemonic; they are strictly intermediate artifacts of the arithmetic in $GF(2053)$.
   - **Column 4 ("Group Checksum")**: the checksum share value for $c_r$, displayed in the same numeric-plus-mnemonic format.
 
 This consistent layout allows the user to treat each row as a self-contained unit during recovery: recover three words and one checksum, verify them immediately, and then proceed to the next row. By the time the final row is completed and the master sum verified, the user has a high degree of assurance that all arithmetic has been performed correctly.
@@ -229,7 +231,7 @@ $$
 
 These coefficients depend only on the chosen subset of share indices, not on the secret values or the random coefficients. Once computed for a given subset, they can be used for every secret associated with those indices.
 
-The Schiavinato Cipher leverages this property as follows:
+Schiavinato Sharing leverages this property as follows:
 
 - For commonly used threshold schemes (e.g., 2-of-3, 2-of-4, 3-of-5), the documentation provides tables of $\gamma_j$ values for each possible subset of share indices.
 - The GRIFORTIS tools include a "Lagrange calculator" that, given a modulus $p$, a threshold $k$, and a set of indices, computes the corresponding coefficients. Because this calculation involves modular division, it is delegated to a device, but it can safely be performed on a non-air-gapped computer: the coefficients contain no information about the secrets.
@@ -242,31 +244,33 @@ For completeness, the following table lists pre-computed Lagrange coefficients $
 
 | Scheme | Shares Used | Coefficients ($\gamma$) |
 | :--- | :--- | :--- |
-| **2-of-3** | {1, 2} | (2052, 2) |
-|  | {1, 3} | (1026, 1028) |
-|  | {2, 3} | (2051, 3) |
-| **2-of-4** | {1, 2} | (2052, 2) |
-|  | {1, 3} | (1026, 1028) |
-|  | {1, 4} | (684, 1370) |
-|  | {2, 3} | (2051, 3) |
+| **2-of-3** | {1, 2} | (2, 2052) |
+|  | {1, 3} | (1028, 1026) |
+|  | {2, 3} | (3, 2051) |
+| **2-of-4** | {1, 2} | (2, 2052) |
+|  | {1, 3} | (1028, 1026) |
+|  | {1, 4} | (1370, 684) |
+|  | {2, 3} | (3, 2051) |
 |  | {2, 4} | (2, 2052) |
-|  | {3, 4} | (2050, 4) |
-| **3-of-5** | {1, 2, 3} | (3, 2050, 1026) |
-|  | {1, 2, 4} | (2, 2051, 684) |
-|  | {1, 2, 5} | (1370, 1368, 342) |
-|  | {1, 3, 4} | (1028, 1025, 2051) |
-|  | {1, 3, 5} | (1540, 513, 2051) |
-|  | {1, 4, 5} | (514, 1539, 1368) |
-|  | {2, 3, 4} | (1027, 2, 1025) |
-|  | {2, 3, 5} | (685, 2052, 342) |
-|  | {2, 4, 5} | (1028, 2052, 1026) |
-|  | {3, 4, 5} | (3, 2050, 685) |
+|  | {3, 4} | (4, 2050) |
+| **3-of-5** | {1, 2, 3} | (3, 2050, 1) |
+|  | {1, 2, 4} | (687, 2051, 1369) |
+|  | {1, 2, 5} | (1029, 1367, 1711) |
+|  | {1, 3, 4} | (2, 2051, 1) |
+|  | {1, 3, 5} | (1285, 512, 257) |
+|  | {1, 4, 5} | (686, 1367, 1) |
+|  | {2, 3, 4} | (6, 2045, 3) |
+|  | {2, 3, 5} | (5, 2048, 1) |
+|  | {2, 4, 5} | (1372, 2048, 687) |
+|  | {3, 4, 5} | (10, 2038, 6) |
+
+These values were computed in $GF(2053)$ using the definition of $\gamma_j$ in Section 3.4 and are automatically verified in the reference implementation.
 
 The number of possible index subsets grows combinatorially with $n$. For larger schemes, comprehensive tables become impractical, and users are expected to compute or obtain the relevant coefficients as needed.
 
 #### 3.9 BIP39 Compatibility
 
-The Schiavinato Cipher operates on standard BIP39 word indices and does not alter the wordlist. The only deviation arises when a share value lies in the range 2048–2052, which cannot be mapped to a BIP39 word. In this rare case, the recovery instructions direct the user to write down the numeric value itself. The reference tools treat such values as non-mnemonic placeholders in intermediate calculations and only construct final mnemonics from values in 0–2047.
+Schiavinato Sharing operates on standard BIP39 word indices and does not alter the wordlist. The only deviation arises when a share value lies in the range 2048–2052, which cannot be mapped to a BIP39 word. In this rare case, the recovery instructions direct the user to write down the numeric value itself. The reference tools treat such values as non-mnemonic placeholders in intermediate calculations and only construct final mnemonics from values in 0–2047.
 
 As a result, any recovered mnemonic that consists solely of indices in 0–2047 is a standard BIP39 phrase and is accepted by existing wallets without modification. The underlying entropy and checksum semantics of BIP39 are preserved.
 
@@ -274,18 +278,18 @@ As a result, any recovered mnemonic that consists solely of indices in 0–2047 
 
 ### **4. Security Analysis**
 
-#### 4.1 Computational Security
+#### 4.1 Security Properties and Information-Theoretic Guarantees
 
-At its core, the Schiavinato Cipher is a collection of independent Shamir secret-sharing instances over $GF(2053)$. Each word index, each row checksum, and the master checksum are shared by their own polynomials of degree at most $k-1$ with independently sampled random coefficients.
+At its core, Schiavinato Sharing is a collection of independent Shamir secret-sharing instances over $GF(2053)$. Each word index, each row checksum, and the master checksum are shared by their own polynomials of degree at most $k-1$ with independently sampled random coefficients.
 
 The security claims therefore reduce to the standard properties of Shamir's scheme:
 
 - **Threshold property**: Any set of at least $k$ consistent shares for a given secret uniquely determines that secret. Any set of fewer than $k$ shares yields no information about the secret beyond what is already implied by its domain.
-- **Information-theoretic secrecy**: For any two candidate secret values $s_0, s_1 \in GF(2053)$, the distribution of any $t < k$ shares generated from $s_0$ is identical to the distribution of $t$ shares generated from $s_1$, assuming coefficients are sampled uniformly and independently.
+- **Information-theoretic secrecy**: For any two candidate secret values $s_0, s_1 \in GF(2053)$, the distribution of any $t < k$ shares generated from $s_0$ is identical to the distribution of $t$ shares generated from $s_1$, assuming coefficients are sampled uniformly and independently; in this sense the scheme provides perfect, information-theoretic (unconditional) secrecy for each shared value.
 
-Because each of the 33 secrets is shared independently, knowledge of shares or even full recovery of one secret does not aid in recovering any other secret without the requisite number of shares for that secret. In particular, the checksum secrets do not leak information about individual word indices beyond the arithmetic relationships deliberately encoded (e.g., sums modulo 2053).
+Because each of the 33 secrets is shared independently, knowledge of shares or even full recovery of one secret does not aid in recovering any other secret without the requisite number of shares for that secret. In particular, the checksum secrets do not leak information about individual word indices beyond the arithmetic relationships deliberately encoded (e.g., sums modulo 2053): with fewer than $k$ shares, even conditioning on equations such as $c_r = \sum w_{r,i} \pmod{2053}$ or $M = \sum w_i \pmod{2053}$ does not reveal additional information about any single $w_{r,i}$ beyond its domain.
 
-The effective keyspace of a 24-word BIP39 mnemonic is approximately $2^{256}$. Representing the mnemonic as 24 indices in $GF(2053)$ does not compress this space; it merely maps it into a larger ambient field. Consequently, the Schiavinato Cipher preserves the conventional $2^{256}$ brute-force complexity associated with BIP39.
+The effective keyspace of a 24-word BIP39 mnemonic is approximately $2^{256}$. Representing the mnemonic as 24 indices in $GF(2053)$ does not compress this space; it merely maps it into a larger ambient field. Consequently, while each shared secret enjoys information-theoretic secrecy up to the threshold, the overall brute-force complexity for guessing a valid mnemonic remains the conventional $2^{256}$ associated with BIP39.
 
 #### 4.2 Human-Factor Vulnerabilities and Mitigations
 
@@ -296,27 +300,27 @@ The two-layer checksum mechanism described in Section 3.5 is designed to mitigat
 - Row-level checksums localize errors to specific rows, enabling users to detect and correct mistakes before propagating them.
 - The master verification number adds a global consistency check over all 24 recovered words, ensuring that no residual errors remain undetected.
 
-Under a simple random-error model, the probability that an incorrect row passes its checksum test is at most $1/2053$, and the probability that incorrect rows collectively also preserve the master sum is at most another factor of $1/2053$. Thus, the chance that arbitrary arithmetic mistakes escape all checks is bounded above by $(1/2053)^9$, which is so small as to be negligible in practice.
+Under the same random-error model discussed in Section 3.5, the probability that an incorrect row passes its checksum test is at most $1/2053$, and the probability that such errors also preserve the master sum is at most another factor of $1/2053$. With an additional independence assumption across rows this yields an overall error-escape probability on the order of $(1/2053)^9$; even without that assumption, the per-row-plus-master bound of $1/2053^2$ is already so small as to be negligible in practice.
 
 From a usability perspective, the design offers a favorable trade-off: users perform only familiar operations (addition, multiplication, reduction) and receive immediate feedback at the row level, significantly reducing the cognitive load and the risk of silent failure.
 
 #### 4.3 Physical Security Assumptions
 
-As with any secret-sharing scheme, the overall security of the Schiavinato Cipher depends on the physical handling of shares. The analysis assumes that:
+As with any secret-sharing scheme, the overall security of Schiavinato Sharing depends on the physical handling of shares. The analysis assumes that:
 
 - No adversary can reliably obtain $k$ or more distinct shares for the same wallet.
 - Legitimate participants can access at least $k$ valid shares when recovery is required.
 - Shares are protected against tampering, loss, and unauthorized duplication according to the user's threat model.
 
-The cipher does not prescribe a particular strategy for distributing or storing shares (for example, geographically or socially), as such strategies are context-dependent. It simply provides a mathematically sound mechanism for ensuring that fewer than $k$ shares reveal nothing about the BIP39 secret.
+The scheme does not prescribe a particular strategy for distributing or storing shares (for example, geographically or socially), as such strategies are context-dependent. It simply provides a mathematically sound mechanism for ensuring that fewer than $k$ shares reveal nothing about the BIP39 secret.
 
 ---
 
 ### **5. The GRIFORTIS Reference Implementation**
 
-To facilitate adoption and independent auditing, this section sketches a set of open-source reference tools that implement the Schiavinato Cipher. GRIFORTIS intends to develop these tools so that they embody the same principles of simplicity, transparency, and offline operation that motivate the scheme itself.
+To facilitate adoption and independent auditing, this section sketches a set of open-source reference tools that implement Schiavinato Sharing. GRIFORTIS intends to develop these tools so that they embody the same principles of simplicity, transparency, and offline operation that motivate the scheme itself.
 
-#### 5.1 The `schiavinato-cipher.html` Tool
+#### 5.1 The `schiavinato-sharing.html` Tool
 
 The primary reference implementation is a single self-contained HTML/JavaScript file, intended to be executed on an air-gapped computer. Its design adheres to the following constraints:
 
@@ -350,9 +354,9 @@ Within these constraints, the tool offers four main workflows:
 
 Although the tool is designed for convenience, its logic and arithmetic are intentionally straightforward so that independent auditors can validate the implementation against the specification.
 
-#### 5.2 The `schiavinato_cipher` Libraries
+#### 5.2 The `schiavinato_sharing` Libraries
 
-For developers and auditors, we outline the design of reference libraries in both Python and JavaScript (with TypeScript type declarations). These libraries are intended to expose the core cryptographic and combinatorial operations of the Schiavinato Cipher.
+For developers and auditors, we outline the design of reference libraries in both Python and JavaScript (with TypeScript type declarations). These libraries are intended to expose the core cryptographic and combinatorial operations of Schiavinato Sharing.
 
 At a high level, the API is organized around the following concepts:
 
@@ -389,7 +393,7 @@ All reference implementations are released under the **MIT License**, allowing i
 The GRIFORTIS tools are deliberately narrow in scope:
 
 - They **do not generate new BIP39 master seeds**. Users are expected to generate mnemonics through their preferred wallets or hardware devices.
-- They focus exclusively on **splitting and recovering existing BIP39 mnemonics** using the Schiavinato Cipher.
+- They focus exclusively on **splitting and recovering existing BIP39 mnemonics** using Schiavinato Sharing.
 - They do not perform any signing operations, key derivation, or transaction management.
 
 This separation of concerns simplifies auditing and reduces the attack surface: the tools handle only the arithmetic and bookkeeping associated with secret sharing and recovery.
@@ -398,10 +402,10 @@ This separation of concerns simplifies auditing and reduces the attack surface: 
 
 ### **6. Future Work and Applications**
 
-Several directions for future work and further applications are natural extensions of the Schiavinato Cipher and its reference implementation:
+Several directions for future work and further applications are natural extensions of Schiavinato Sharing and its reference implementation:
 
 - **Integration with existing wallets**:  
-  Tools and plug-ins that integrate the Schiavinato Cipher with popular wallets could streamline recovery workflows while keeping core signing and derivation logic unchanged. For example, an offline device could recover a mnemonic from shares and then hand it directly to a wallet application without exposing it to networked systems.
+  Tools and plug-ins that integrate Schiavinato Sharing with popular wallets could streamline recovery workflows while keeping core signing and derivation logic unchanged. For example, an offline device could recover a mnemonic from shares and then hand it directly to a wallet application without exposing it to networked systems.
 
 - **Standardized share encoding formats**:  
   A formal, implementation-independent specification for encoding `MnemonicShare` objects (e.g., in JSON or CBOR) would facilitate interoperability. This encoding could be mapped to visual formats such as QR codes or UR-style strings, enabling hybrid workflows where shares are both printable and scannable, while preserving the option of purely paper-based operation.
@@ -418,7 +422,7 @@ Community contributions—such as ports of the reference library to additional l
 
 ### **7. Conclusion**
 
-The Schiavinato Cipher presents a human-centric adaptation of Shamir's Secret Sharing for BIP39 mnemonics. By operating directly on word indices in a small prime field and layering in robust arithmetic checksums, it enables manual recovery with only pencil and paper while preserving the information-theoretic security of the underlying scheme.
+Schiavinato Sharing presents a human-centric adaptation of Shamir's Secret Sharing for BIP39 mnemonics. By operating directly on word indices in a small prime field and layering in robust arithmetic checksums, it enables manual recovery with only pencil and paper while preserving the information-theoretic security of the underlying scheme.
 
 The GRIFORTIS reference implementation demonstrates that such a scheme can be realized in a single auditable HTML file and small, MIT-licensed libraries suitable for integration and scrutiny. Taken together, the design offers a practical path toward more resilient, verifiable, and long-lived storage of digital bearer assets.
 
@@ -461,7 +465,7 @@ Formally, for any set of $t < k$ observed shares and any two candidate secrets $
 
 ### **Appendix B: A Gentle Introduction to Modular Arithmetic**
 
-Modular arithmetic is the system of arithmetic that makes the Schiavinato Cipher executable by hand. It behaves like "clock arithmetic": values wrap around after reaching a fixed modulus.
+Modular arithmetic is the system of arithmetic that makes Schiavinato Sharing executable by hand. It behaves like "clock arithmetic": values wrap around after reaching a fixed modulus.
 
 #### B.1 The Modulus and Basic Operations
 
@@ -477,7 +481,7 @@ For example, with modulus 12 (a clock with 12 hours):
 - $20 \bmod 12 = 8$.
 - $-1 \bmod 12 = 11$.
 
-Addition and multiplication follow the usual rules, followed by reduction modulo $p$. In the Schiavinato Cipher, the modulus is the prime
+Addition and multiplication follow the usual rules, followed by reduction modulo $p$. In Schiavinato Sharing, the modulus is the prime
 
 $$
 p = 2053
@@ -508,7 +512,7 @@ $$
 
 Division by a non-zero element $a$ is defined as multiplication by its inverse $a^{-1}$. Finding inverses in practice can be done using the extended Euclidean algorithm, but this process is more involved than simple addition or multiplication.
 
-One of the reasons the Schiavinato Cipher pre-computes Lagrange coefficients is precisely to avoid asking users to compute modular inverses by hand. All required division is encapsulated in those coefficients. Users performing recovery only need to multiply and add integers modulo 2053.
+One of the reasons Schiavinato Sharing pre-computes Lagrange coefficients is precisely to avoid asking users to compute modular inverses by hand. All required division is encapsulated in those coefficients. Users performing recovery only need to multiply and add integers modulo 2053.
 
 ---
 
@@ -571,11 +575,11 @@ $$
 a_0 = f(0) = \sum_{j=1}^{k} \gamma_j y_j \quad (\text{mod } 2053)
 $$
 
-This is precisely the formula used by the Schiavinato Cipher. Once the $\gamma_j$ corresponding to a particular subset of share indices have been computed, recovery of the secret reduces to a weighted sum.
+This is precisely the formula used by Schiavinato Sharing. Once the $\gamma_j$ corresponding to a particular subset of share indices have been computed, recovery of the secret reduces to a weighted sum.
 
 #### C.4 Practical Considerations
 
-Computing the $\gamma_j$ from the defining formula requires modular inverses of the denominators $x_j - x_i$. While this is straightforward for software, it is undesirable for manual computation. Instead, the Schiavinato Cipher:
+Computing the $\gamma_j$ from the defining formula requires modular inverses of the denominators $x_j - x_i$. While this is straightforward for software, it is undesirable for manual computation. Instead, Schiavinato Sharing:
 
 - treats $\gamma_j$ as non-secret and safe to compute on any device, and
 - provides pre-computed $\gamma_j$ tables for common schemes, so manual users only ever perform multiplications and additions.
@@ -586,7 +590,7 @@ This separation keeps manual recovery within the reach of users comfortable with
 
 ### **Appendix D: Worked Example of Manual Sharing and Recovery**
 
-To illustrate the mechanics of the Schiavinato Cipher in a compact setting, this appendix presents a toy example using a small prime modulus. The real scheme uses $p = 2053$; here we use $p = 13$ for simplicity. The structure of the calculations is the same, but the numbers are smaller.
+To illustrate the mechanics of Schiavinato Sharing in a compact setting, this appendix presents a toy example using a small prime modulus. The real scheme uses $p = 2053$; here we use $p = 13$ for simplicity. The structure of the calculations is the same, but the numbers are smaller.
 
 #### D.1 Setup
 
@@ -685,6 +689,6 @@ $$
 
 This confirms that the recovered secrets and the checksum are internally consistent.
 
-In the actual Schiavinato Cipher, all arithmetic is performed in $GF(2053)$ and Lagrange coefficients are derived once from a precise specification, but the pattern of computation is exactly the same as in this toy example. Users performing manual recovery follow this pattern row by row, using pre-computed coefficients appropriate to their chosen threshold scheme.
+In the actual Schiavinato Sharing scheme, all arithmetic is performed in $GF(2053)$ and Lagrange coefficients are derived once from a precise specification, but the pattern of computation is exactly the same as in this toy example. Users performing manual recovery follow this pattern row by row, using pre-computed coefficients appropriate to their chosen threshold scheme.
 
 
