@@ -4,8 +4,1535 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GRIFORTIS · Schiavinato Sharing (Air-Gapped)</title>
+    
+    <!-- FONTS: use only local system fonts, no external references -->
+
+    <style>
+        /* ==========================================================================
+        GRIFORTIS - DESIGN SYSTEM (v1.0)
+        ==========================================================================
+        */
+
+        :root {
+            /* --- 1. BRAND COLORS (FIXED) --- */
+            --brand-navy: #0B1019;
+            --brand-titanium: #E3E4E6;
+            --cyber-gold: #F4B400;
+            --error-red: #FF4444;
+            --success-green: #00E676; /* "Signal Green" for success */
+
+            /* --- 2. DARK THEME (DEFAULT) --- */
+            --bg-main: var(--brand-navy);
+            --bg-card: #151E2E;
+            --text-main: var(--brand-titanium);
+            --text-muted: #8A8D91;
+            --border-color: #2C3E50;
+            --input-bg: rgba(0,0,0,0.3);
+            --input-text: #fff;
+            --shadow-color: rgba(0,0,0,0.5);
+            
+            --btn-disabled-bg: #2C3E50;
+            --btn-disabled-text: #586376;
+            --btn-cancel-border: #4A5568;
+            
+            --alert-error-bg: #3b1f1f;
+            --alert-error-border: #7a2c2c;
+            --alert-error-text: #fecaca;
+            
+            --alert-success-bg: #113a29;
+            --alert-success-border: #1a6445;
+            --alert-success-text: #bbf7d0;
+            
+            color-scheme: dark;
+        }
+
+        /* --- 3. LIGHT THEME (ALTERNATE) --- */
+        [data-theme="light"] {
+            --bg-main: #F0F2F5;
+            --bg-card: #FFFFFF;
+            --text-main: var(--brand-navy);
+            --text-muted: #5E6C84;
+            --border-color: #D1D5DB;
+            --input-bg: #F7F9FC;
+            --input-text: var(--brand-navy);
+            --shadow-color: rgba(0,0,0,0.1);
+            
+            --btn-disabled-bg: #E2E8F0;
+            --btn-disabled-text: #A0AEC0;
+            --btn-cancel-border: #CBD5E0;
+            
+            --alert-error-bg: #FEEEEE;
+            --alert-error-border: #FCA5A5;
+            --alert-error-text: #7f1d1d;
+            
+            --alert-success-bg: #E6F8F2;
+            --alert-success-border: #6EE7B7;
+            --alert-success-text: #064e3b;
+            
+            color-scheme: light;
+        }
+
+        /* --- 4. BASIC RESET AND TRANSITIONS --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            /* Font stack using local system fonts only */
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-weight: 400;
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        /* --- 5. TYPOGRAPHY (VOICE) --- */
+        h1, h2, h3, h4 {
+            /* Headings using bold system fonts */
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--text-main);
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5em;
+        }
+        h1 { font-size: 2.5rem; }
+        h2 { font-size: 1.75rem; /*margin-top: 2em;*/ }
+        h3 { font-size: 1.25rem; font-weight: 700; margin-top: 1.5em; }
+        h4 { font-size: 1rem; font-weight: 700; margin-top: 1em; }
+        p { font-size: 1rem; margin-bottom: 1em; }
+        code, .mono { 
+            /* Monospaced text using common local system fonts only */
+            font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; 
+            background: var(--input-bg);
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        a { 
+            color: var(--cyber-gold); 
+            text-decoration: none; 
+            border-bottom: 1px dashed var(--cyber-gold);
+            transition: all 0.2s;
+        }
+        a:hover { color: var(--text-main); border-bottom: 1px solid var(--text-main); }
+        hr { border: 0; border-top: 1px solid var(--border-color); margin: 2em 0; }
+
+        /* --- 6. LAYOUT (CONTAINERS) --- */
+        .container {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 0;
+            margin-bottom: 20px;
+        }
+        .header h1 { 
+            font-size: 1.5rem; margin: 0; 
+            background: -webkit-linear-gradient(45deg, var(--text-main), var(--text-muted));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .connection-status {
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            padding: 5px 10px;
+            border-radius: 6px;
+            margin-left: 20px;
+        }
+        .connection-status.online {
+            color: #000;
+            background-color: var(--error-red);
+        }
+        .connection-status.offline {
+            color: var(--text-muted);
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+        }
+        .theme-toggle {
+            background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main);
+            padding: 8px 16px; border-radius: 50px; cursor: pointer; font-weight: 600;
+            font-size: 0.9rem; display: flex; gap: 8px; align-items: center;
+        }
+        .component-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px var(--shadow-color);
+            margin-bottom: 20px;
+        }
+        
+        /* --- 7. FORMS (INPUT FIELDS) --- */
+        .form-group { margin-bottom: 1rem; }
+        label { 
+            display: block; font-size: 0.9rem; 
+            /* Labels use the same system font stack as the body */
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-weight: 600; 
+            color: var(--text-muted); margin-bottom: 8px; 
+        }
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        input[type="date"],
+        select {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--input-text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--cyber-gold);
+            box-shadow: 0 0 0 2px rgba(244, 180, 0, 0.3);
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: var(--bg-main) invert(1);
+        }
+        [data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: none;
+        }
+        
+        /* Custom checkbox & radio controls */
+        .choice-group { display: flex; align-items: center; margin-bottom: 10px; }
+        .choice-group input { opacity: 0; width: 0; height: 0; }
+        .choice-group label {
+            display: flex; align-items: center; cursor: pointer;
+            font-family: 'Inter', sans-serif; font-weight: 400;
+            color: var(--text-main);
+        }
+        .choice-group label::before {
+            content: '';
+            width: 18px; height: 18px;
+            border: 2px solid var(--border-color);
+            background: var(--input-bg);
+            margin-right: 12px;
+            transition: all 0.2s;
+        }
+        /* Checkbox */
+        input[type="checkbox"] + label::before { border-radius: 4px; }
+        input[type="checkbox"]:checked + label::before {
+            background-color: var(--cyber-gold);
+            border-color: var(--cyber-gold);
+            content: '✓'; /* Checkmark */
+            color: #000;
+            font-weight: 900;
+            text-align: center;
+            line-height: 15px;
+        }
+        /* Radio */
+        input[type="radio"] + label::before { border-radius: 50%; }
+        input[type="radio"]:checked + label::before {
+            background-color: var(--bg-card);
+            border-color: var(--cyber-gold);
+            box-shadow: inset 0 0 0 4px var(--cyber-gold); /* Center dot */
+        }
+        
+        /* --- 8. BUTTONS (ACTIONS) --- */
+        .btn {
+            width: auto; padding: 12px 24px; border-radius: 6px;
+            /* Buttons use bold system font for strong visual hierarchy */
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-weight: 800; font-size: 0.9rem;
+            text-transform: uppercase; cursor: pointer; border: none;
+            transition: all 0.2s; margin: 5px;
+        }
+        /* Primary button (gold) */
+        .btn-primary {
+            background-color: var(--cyber-gold);
+            color: #000;
+            box-shadow: 0 4px 15px rgba(244, 180, 0, 0.2);
+        }
+        .btn-primary:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.1); }
+        .btn-primary:disabled {
+            background-color: var(--btn-disabled-bg);
+            color: var(--btn-disabled-text);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        /* Secondary button (ghost / cancel) */
+        .btn-secondary {
+            background-color: transparent;
+            border: 1px solid var(--btn-cancel-border);
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+        .btn-secondary:hover { border-color: var(--text-main); color: var(--text-main); }
+        
+        /* --- 9. MESSAGES & ALERTS --- */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        /* Success (green) */
+        .alert-success {
+            background-color: var(--alert-success-bg);
+            border-color: var(--alert-success-border);
+            color: var(--alert-success-text);
+        }
+        /* Error (red) */
+        .alert-error {
+            background-color: var(--alert-error-bg);
+            border-color: var(--alert-error-border);
+            color: var(--alert-error-text);
+        }
+        
+        /* --- 10. DISCLAIMER / FOOTER --- */
+        .disclaimer {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 2rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1.5rem;
+        }
+
+        /* Custom style for seed word inputs */
+        .seed-word-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .seed-word-row label {
+            font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            color: var(--text-muted);
+            width: 30px; /* fixed width for alignment */
+            text-align: right;
+            margin-bottom: 0; /* Override default label margin */
+        }
+        .seed-word-row input {
+            flex-grow: 1;
+        }
+
+        /* Page 2: Share Card Refinements */
+        .share-card h3 {
+            margin-top: 0;
+        }
+        .share-metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 0.5rem 2rem;
+            margin: 1.5rem 0;
+        }
+        .share-metadata p {
+            margin-bottom: 0.5em;
+        }
+
+        .share-word-container {
+            background: var(--input-bg);
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .share-word-list {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px 10px; /* Increased vertical gap */
+        }
+        .share-word-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .share-word-item label {
+            font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            color: var(--text-muted);
+            width: 30px; /* fixed width for alignment */
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .share-word-item code.mono {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: center;
+            border-radius: 6px; /* Match input fields */
+            flex-grow: 1;
+            width: 100%;
+        }
+
+        /* Autocomplete & Validation Styles */
+        #autocomplete-suggestions {
+            position: absolute;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-card);
+            box-shadow: 0 4px 20px var(--shadow-color);
+            border-radius: 8px;
+            z-index: 1001;
+            max-height: calc(100vh - 40px); /* Limit height to viewport with some padding */
+            min-width: 200px; /* Give it a minimum width */
+            overflow-y: auto;
+        }
+        .autocomplete-suggestion {
+            padding: 10px;
+            cursor: pointer;
+            font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+        .autocomplete-suggestion.autocomplete-active {
+            background-color: var(--input-bg);
+            color: var(--cyber-gold);
+        }
+        input.invalid {
+            border-color: var(--error-red) !important;
+            box-shadow: 0 0 0 2px rgba(255, 68, 68, 0.3) !important;
+        }
+
+        /* Sub-header Styles */
+        .flow-subheader {
+            font-size: 1.25rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        /* Landing Page Specific Styles */
+        #pageLanding .component-card ul {
+            padding-left: 25px; /* Indent the list */
+            margin-top: 1em;
+        }
+        #pageLanding .component-card li {
+            margin-bottom: 1em; /* Add space between list items */
+        }
+
+        /* Home Page Styles */
+        .home-button {
+            display: block;
+            width: 100%;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background-color: var(--bg-card);
+            color: var(--text-main);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .home-button:hover {
+            border-color: var(--cyber-gold);
+            transform: translateY(-3px);
+            box-shadow: 0 4px 20px var(--shadow-color);
+        }
+        .home-button h2 {
+            font-size: 1.75rem;
+            margin: 0 0 10px 0;
+        }
+        .home-button p {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* Recover Page Styles */
+        .horizontal-radio-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .share-input-container {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: var(--bg-card);
+        }
+        .share-input-container h3 {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        /* Custom Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: var(--bg-card);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+            width: 90%;
+            max-width: 450px;
+            text-align: center;
+        }
+        .modal-buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        /* --- 11. PRINT STYLES --- */
+        @media print {
+            /* Hide elements not meant for printing */
+            .header, #page1, .disclaimer, #page2 .btn, #btn-back-to-page1, #btn-start-over, .theme-toggle {
+                display: none;
+            }
+            
+            /* Force light theme colors for better readability and ink saving */
+            body {
+                --bg-main: #FFFFFF;
+                --bg-card: #FFFFFF;
+                --text-main: #0B1019;
+                --text-muted: #5E6C84;
+                --border-color: #AEB5BC;
+                --input-bg: #F0F2F5;
+                --input-text: var(--brand-navy);
+                --shadow-color: transparent;
+            }
+
+            /* General print setup */
+            body, .container {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* Reset card styles for printing */
+            .component-card {
+                box-shadow: none;
+                border: 1px solid var(--border-color);
+                margin-bottom: 20px;
+            }
+            
+            /* Page break logic for shares */
+            .share-card {
+                break-before: page; /* Modern property */
+                page-break-before: always; /* Older property */
+            }
+
+            /* Prevent page break on the first share card */
+            #shares-output > .share-card:first-child {
+                break-before: auto;
+                page-break-before: auto;
+            }
+            
+            /* Make sure the main content of page 2 is visible */
+            #page2 {
+                display: block !important;
+            }
+        }
+
+    </style>
 </head>
 <body>
 
+    <div class="container">
+        <!-- ==========================================================================
+        HEADER
+        - Contains the main title, the online status indicator, and theme toggle.
+        - This header is persistent across all pages.
+        ========================================================================== -->
+        <header class="header">
+            <div style="display: flex; align-items: center;">
+                <h1>Schiavinato Sharing</h1>
+                <div id="connection-status" class="connection-status"></div>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <span id="toggle-icon">☀️</span> <span id="toggle-text">Light Mode</span>
+            </button>
+        </header>
+
+        <!-- ==========================================================================
+        MAIN CONTENT WRAPPER
+        - Contains all application "pages". Only one page is visible at a time.
+        ========================================================================== -->
+        <main>
+            <!-- ==========================================================================
+            PAGE -1: LANDING & DISCLAIMER
+            - The very first page the user sees.
+            - Forces the user to acknowledge the risks before proceeding.
+            ========================================================================== -->
+            <section id="pageLanding">
+                <div class="component-card">
+                    <h2 style="color: var(--error-red); text-align: center;">⚠️ WARNING: EXPERIMENTAL SOFTWARE ⚠️</h2>
+                    <p style="text-align: center; font-weight: 600;">
+                        This is an experimental, open-source project. Do NOT use it for important assets at this stage.
+                    </p>
+                    <hr>
+                    <h3>Terms of Use & Liability Disclaimer</h3>
+                    <ul>
+                        <li><strong>You must be offline.</strong> This tool is designed for air-gapped environments only. Disconnect from all networks before proceeding.</li>
+                        <li><strong>You must use a secure environment.</strong> For maximum security, use a temporary, trusted operating system (e.g., Tails) or a fresh OS install on a secure computer.</li>
+                        <li><strong>You are 100% responsible.</strong> GRIFORTIS and its contributors are not responsible for any loss of funds, data corruption, or any other damages that may result from using this software. Use at your own risk.</li>
+                    </ul>
+                    <hr>
+                    <div class="form-group" style="margin-top: 20px;">
+                        <div class="choice-group">
+                            <input type="checkbox" id="disclaimer-checkbox">
+                            <label for="disclaimer-checkbox">I have read the warnings, I know exactly what I'm doing, and I'm aware of the risks.</label>
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button id="btn-continue-to-home" class="btn btn-primary" disabled>Continue</button>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- This container will hold the sub-header for the flows -->
+            <h2 id="flow-subheader" class="flow-subheader" style="display: none;"></h2>
+
+            <!-- ==========================================================================
+            PAGE 0: HOME
+            - The main entry point of the application.
+            - Provides navigation to the two primary flows: Create and Recover.
+            ========================================================================== -->
+            <section id="pageHome" style="display: none;">
+                <button class="home-button" id="btn-go-to-recover">
+                    <h2>Recover Wallet</h2>
+                    <p>Enter the data from the shares and recover the wallet</p>
+                </button>
+                <button class="home-button" id="btn-go-to-create">
+                    <h2>Create Shares</h2>
+                    <p>Enter the data from the wallet and create the shares</p>
+                </button>
+            </section>
+            
+            <!-- ==========================================================================
+            PAGE 1: CREATE SHARES - DATA INPUT
+            - The first step in the "Create Shares" flow.
+            - Collects all necessary data from the user.
+            ========================================================================== -->
+            <section id="pageCreate1" style="display: none;">
+                
+                <!-- Section 1.1: Wallet Metadata -->
+                <div class="component-card">
+                    <h2>1. Identification and Date</h2>
+                    <div style="display: flex; gap: 20px;">
+                        <!-- Wallet Identifier Input -->
+                        <div class="form-group" style="flex: 2;">
+                            <label for="wallet-identifier">Wallet Identifier (Optional)</label>
+                            <input type="text" id="wallet-identifier" class="mono" placeholder="E.g., Main Wallet" maxlength="40">
+                        </div>
+                        <!-- Creation Date Input -->
+                        <div class="form-group" style="flex: 1;">
+                            <label for="creation-date">Creation Date</label>
+                            <input type="date" id="creation-date" class="mono">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 1.2: Sharding Scheme Selection -->
+                <div class="component-card">
+                    <h2>2. Splitting Scheme (Sharding)</h2>
+                    <div style="display: flex; gap: 30px;">
+                        <!-- Scheme Radio Buttons -->
+                        <div class="form-group" style="flex: 1;">
+                            <label>Select scheme</label>
+                            <div class="choice-group">
+                                <input type="radio" id="scheme-2of3" name="scheme" value="2of3" checked>
+                                <label for="scheme-2of3">2-of-3 (Default)</label>
+                            </div>
+                            <div class="choice-group">
+                                <input type="radio" id="scheme-2of4" name="scheme" value="2of4">
+                                <label for="scheme-2of4">2-of-4</label>
+                            </div>
+                            <div class="choice-group">
+                                <input type="radio" id="scheme-3of5" name="scheme" value="3of5">
+                                <label for="scheme-3of5">3-of-5 (Sovereign)</label>
+                            </div>
+                        </div>
+                        <!-- Dynamic Scheme Explanation -->
+                        <div id="scheme-explanation" style="flex: 2; background: var(--input-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <!-- Explanation is dynamically inserted here by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 1.3: Seed Phrase Input -->
+                <div class="component-card">
+                    <h2>3. Seed Phrase</h2>
+                    <!-- Word Count Toggle -->
+                    <div class="form-group" style="text-align: center;">
+                        <button id="btn-12-words" class="btn btn-secondary">12 Words</button>
+                        <button id="btn-24-words" class="btn btn-primary">24 Words</button>
+                    </div>
+                    <!-- Container for dynamic seed word inputs -->
+                    <div id="seed-word-inputs" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        <!-- Inputs are dynamically inserted here by JS -->
+                    </div>
+                </div>
+
+                <!-- Page 1 Footer Buttons -->
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button class="btn btn-secondary btn-back-home">Back to Home</button>
+                    <button id="btn-generate-shares" class="btn btn-primary">Generate Shares</button>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+            PAGE 2: CREATE SHARES - DISPLAY
+            - The second step in the "Create Shares" flow.
+            - Displays the generated shares ready for printing or transcription.
+            ========================================================================== -->
+            <section id="pageCreate2" style="display: none;">
+
+                <!-- Instructions and Print Button -->
+                <div class="component-card">
+                    <h2>Shares Generated</h2>
+                    <p>Your shares are ready. Transcribe or print them and store them in a safe place. <strong>All data shown below must be transcribed onto each corresponding share.</strong></p>
+                    <div class="alert alert-error">
+                        <strong>ATTENTION:</strong> This data will not be saved. After closing this page, it will be gone forever. Double-check everything before you leave.
+                    </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="window.print()">🖨️ Print Shares</button>
+                    </div>
+                </div>
+
+                <!-- Container for dynamically generated share cards -->
+                <div id="shares-output">
+                    <!-- Example of a single share card -->
+                    <div class="component-card share-card">
+                        <h3>Share 1 of 3</h3>
+                        <hr>
+                        <div class="share-metadata">
+                            <p><strong>Wallet Identifier:</strong> Main Wallet</p>
+                            <p><strong>Creation Date:</strong> 2025-11-21</p>
+                            <p><strong>Share Number (X):</strong> 1</p>
+                            <p><strong>Scheme Threshold (K):</strong> 2</p>
+                            <p><strong>Original Seed Phrase Length:</strong> 24</p>
+                            <p><strong>Master Verification:</strong> <code class="mono">abandon - 0001</code></p>
+                        </div>
+                        <h4 style="margin-top: 25px; margin-bottom: 10px; color: var(--text-muted); font-weight: 600;">Encrypted Seed Phrase (Y) - Not a real BIP39 seed phrase</h4>
+                        <div class="share-word-container">
+                            <div class="share-word-list">
+                                <div class="share-word-item"><label>1.</label><code class="mono">hospital - 0876</code></div>
+                                <div class="share-word-item"><label>2.</label><code class="mono">spray - 1654</code></div>
+                                <div class="share-word-item"><label>3.</label><code class="mono">logic - 1042</code></div>
+                                <div class="share-word-item"><label>C1.</label><code class="mono">lemon - 1014</code></div>
+                                <div class="share-word-item"><label>4.</label><code class="mono">manual - 1083</code></div>
+                                <div class="share-word-item"><label>5.</label><code class="mono">forward - 0721</code></div>
+                                <div class="share-word-item"><label>6.</label><code class="mono">vehicle - 1959</code></div>
+                                <div class="share-word-item"><label>C2.</label><code class="mono">glass - 0789</code></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- End of example -->
+                </div>
+
+                <!-- Page 2 Footer Buttons -->
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button id="btn-back-to-create1" class="btn btn-secondary">← Go Back and Edit</button>
+                    <button id="btn-start-over-create" class="btn btn-primary">Clear All & Start Over</button>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+            PAGE 3: RECOVER WALLET - DATA INPUT
+            - The first step in the "Recover Wallet" flow.
+            - Dynamically generates input fields based on user's scheme selection.
+            ========================================================================== -->
+            <section id="pageRecover1" style="display: none;">
+                <!-- Section 3.1: Recovery Parameters -->
+                <div class="component-card">
+                    <h2>1. Enter Recovery Parameters</h2>
+                    <div style="display: flex; gap: 30px; align-items: flex-end;">
+                        <!-- Scheme Threshold Selection -->
+                        <div class="form-group" style="flex: 1;">
+                            <label>Scheme Threshold (K)</label>
+                            <div class="horizontal-radio-group">
+                                <div class="choice-group">
+                                    <input type="radio" id="recover-k-2" name="recover-k" value="2" checked>
+                                    <label for="recover-k-2">2</label>
+                                </div>
+                                <div class="choice-group">
+                                    <input type="radio" id="recover-k-3" name="recover-k" value="3">
+                                    <label for="recover-k-3">3</label>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Master Verification Input -->
+                        <div class="form-group" style="flex: 2;">
+                            <label for="recover-master">Master Verification</label>
+                            <input type="text" id="recover-master" class="mono" placeholder="e.g., abandon - 0001">
+                        </div>
+                    </div>
+                     <!-- Word Count Toggle -->
+                    <div class="form-group" style="margin-top: 20px;">
+                         <label>Original Seed Phrase Length</label>
+                        <div>
+                            <button id="recover-btn-12-words" class="btn btn-secondary">12 Words</button>
+                            <button id="recover-btn-24-words" class="btn btn-primary">24 Words</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3.2: Dynamic Share Inputs -->
+                <div id="recover-shares-container">
+                    <!-- Share input blocks are dynamically inserted here by JS -->
+                </div>
+
+                <!-- Page 3 Footer Buttons -->
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button class="btn btn-secondary btn-back-home">Back to Home</button>
+                    <button id="btn-recover-wallet" class="btn btn-primary">Recover Wallet</button>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+            PAGE 4: RECOVER WALLET - DISPLAY
+            - The second step in the "Recover Wallet" flow.
+            - Displays the successfully recovered original seed phrase.
+            ========================================================================== -->
+            <section id="pageRecover2" style="display: none;">
+                <!-- Success Message and Print Button -->
+                <div class="component-card">
+                    <h2>Wallet Recovered</h2>
+                    <div class="alert alert-success">
+                        <strong>SUCCESS:</strong> The original seed phrase has been recovered.
+                    </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="window.print()">🖨️ Print Recovered Seed</button>
+                    </div>
+                </div>
+
+                <!-- Recovered Seed Phrase Display -->
+                <div class="component-card">
+                    <h4 style="margin-top: 0; margin-bottom: 15px; color: var(--text-muted); font-weight: 600;">Original BIP39 Seed Phrase</h4>
+                    <div class="share-word-list" style="grid-template-columns: repeat(3, 1fr);">
+                        <!-- Example for 24 words -->
+                        <div class="share-word-item"><label>1.</label><code class="mono">abandon</code></div>
+                        <div class="share-word-item"><label>2.</label><code class="mono">ability</code></div>
+                        <div class="share-word-item"><label>3.</label><code class="mono">able</code></div>
+                        <div class="share-word-item"><label>4.</label><code class="mono">about</code></div>
+                        <div class="share-word-item"><label>5.</label><code class="mono">above</code></div>
+                        <div class="share-word-item"><label>6.</label><code class="mono">absent</code></div>
+                        <div class="share-word-item"><label>7.</label><code class="mono">absorb</code></div>
+                        <div class="share-word-item"><label>8.</label><code class="mono">abstract</code></div>
+                        <div class="share-word-item"><label>9.</label><code class="mono">absurd</code></div>
+                        <div class="share-word-item"><label>10.</label><code class="mono">abuse</code></div>
+                        <div class="share-word-item"><label>11.</label><code class="mono">access</code></div>
+                        <div class="share-word-item"><label>12.</label><code class="mono">accident</code></div>
+                        <div class="share-word-item"><label>13.</label><code class="mono">account</code></div>
+                        <div class="share-word-item"><label>14.</label><code class="mono">accuse</code></div>
+                        <div class="share-word-item"><label>15.</label><code class="mono">achieve</code></div>
+                        <div class="share-word-item"><label>16.</label><code class="mono">acid</code></div>
+                        <div class="share-word-item"><label>17.</label><code class="mono">acoustic</code></div>
+                        <div class="share-word-item"><label>18.</label><code class="mono">acquire</code></div>
+                        <div class="share-word-item"><label>19.</label><code class="mono">across</code></div>
+                        <div class="share-word-item"><label>20.</label><code class="mono">act</code></div>
+                        <div class="share-word-item"><label>21.</label><code class="mono">action</code></div>
+                        <div class="share-word-item"><label>22.</label><code class="mono">actor</code></div>
+                        <div class="share-word-item"><label>23.</label><code class="mono">actress</code></div>
+                        <div class="share-word-item"><label>24.</label><code class="mono">actual</code></div>
+                    </div>
+                </div>
+
+                 <!-- Page 4 Footer Buttons -->
+                 <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button class="btn btn-secondary btn-back-home">Back to Home</button>
+                    <button id="btn-start-over-recover" class="btn btn-primary">Clear All & Start Over</button>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+            DISCLAIMER / FOOTER
+            - Persistent footer for all pages.
+            ========================================================================== -->
+            <footer class="disclaimer">
+                <p style="text-align: center; font-weight: 600; margin: 0;">
+                    © 2025 GRIFORTIS. Released under the MIT License.
+                </p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- ==========================================================================
+    MODAL DIALOG
+    - A custom confirmation dialog to replace native browser prompts.
+    - Controlled by the `showConfirmationModal` function in JavaScript.
+    ========================================================================== -->
+    <div id="custom-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="modal-title">Are you sure?</h3>
+            <p id="modal-text">This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+    AUTOCOMPLETE SUGGESTIONS CONTAINER
+    - A single, reusable floating container for autocomplete suggestions.
+    - It is positioned and populated by JavaScript.
+    ========================================================================== -->
+    <div id="autocomplete-suggestions" style="display: none;"></div>
+
+    <!-- ==========================================================================
+    UI BEHAVIOR SCRIPT
+    - This script handles all UI interactions, dynamic content, and navigation.
+    - It contains NO core cryptographic logic.
+    ========================================================================== -->
+    <script>
+        // ==========================================================================
+        // SECTION 1: APPLICATION STATE & CACHE
+        // - These variables hold the application's data, decoupled from the UI.
+        // - Using a simple cache ensures data is preserved during UI changes.
+        // ==========================================================================
+        
+        let createFlowWordCache = Array(24).fill('');
+        let createWordCount = 24;
+
+        let recoverFlowCache = [];
+        const MAX_SHARES = 5;
+        for (let i = 0; i < MAX_SHARES; i++) {
+            recoverFlowCache.push({ shareNumber: '', words: Array(32).fill('') });
+        }
+        let recoverWordCount = 24;
+
+        let activeSuggestionIndex = -1;
+        let allowMouseHover = false;
+        let currentAutocompleteInput = null;
+
+        // ==========================================================================
+        // SECTION 2: DOM ELEMENT REFERENCES
+        // - A central place for all references to DOM elements.
+        // ==========================================================================
+        
+        const pages = {
+            landing: document.getElementById('pageLanding'),
+            home: document.getElementById('pageHome'),
+            create1: document.getElementById('pageCreate1'),
+            create2: document.getElementById('pageCreate2'),
+            recover1: document.getElementById('pageRecover1'),
+            recover2: document.getElementById('pageRecover2'),
+        };
+
+        const disclaimerCheckbox = document.getElementById('disclaimer-checkbox');
+        const btnContinueToHome = document.getElementById('btn-continue-to-home');
+        const flowSubheader = document.getElementById('flow-subheader');
+
+        const btnGoToCreate = document.getElementById('btn-go-to-create');
+        const btnGoToRecover = document.getElementById('btn-go-to-recover');
+        const btnsBackHome = document.querySelectorAll('.btn-back-home');
+        const btnGenerateShares = document.getElementById('btn-generate-shares');
+        const btnBackToCreate1 = document.getElementById('btn-back-to-create1');
+        const btnStartOverCreate = document.getElementById('btn-start-over-create');
+        const btnRecoverWallet = document.getElementById('btn-recover-wallet');
+        const btnStartOverRecover = document.getElementById('btn-start-over-recover');
+
+        const schemeRadios = document.querySelectorAll('input[name="scheme"]');
+        const schemeExplanation = document.getElementById('scheme-explanation');
+        const btn12Words = document.getElementById('btn-12-words');
+        const btn24Words = document.getElementById('btn-24-words');
+        const seedWordInputsContainer = document.getElementById('seed-word-inputs');
+
+        const recoverKRadios = document.querySelectorAll('input[name="recover-k"]');
+        const recoverSharesContainer = document.getElementById('recover-shares-container');
+        const recoverBtn12Words = document.getElementById('recover-btn-12-words');
+        const recoverBtn24Words = document.getElementById('recover-btn-24-words');
+        
+        const modal = document.getElementById('custom-modal');
+        const modalConfirmBtn = document.getElementById('modal-confirm');
+        const modalCancelBtn = document.getElementById('modal-cancel');
+        const modalTitle = document.getElementById('modal-title');
+        const modalText = document.getElementById('modal-text');
+        
+        const connectionStatusEl = document.getElementById('connection-status');
+        const autocompleteContainer = document.getElementById('autocomplete-suggestions');
+
+        // ==========================================================================
+        // SECTION 3: PAGE NAVIGATION
+        // ==========================================================================
+        
+        /**
+         * Hides all pages and shows the one specified by the key.
+         * Also manages the visibility and content of the flow sub-header.
+         * @param {string} pageKey - The key corresponding to the page in the `pages` object.
+         * @param {string} [subheaderText=''] - Optional text for the flow sub-header.
+         */
+        function showPage(pageKey, subheaderText = '') {
+            Object.values(pages).forEach(page => page.style.display = 'none');
+            pages[pageKey].style.display = 'block';
+
+            if (subheaderText) {
+                flowSubheader.textContent = subheaderText;
+                flowSubheader.style.display = 'block';
+            } else {
+                flowSubheader.style.display = 'none';
+            }
+
+            window.scrollTo(0, 0); // Scroll to top on page change
+        }
+
+        btnContinueToHome.addEventListener('click', () => showPage('home'));
+        btnGoToCreate.addEventListener('click', () => showPage('create1', 'Create Shares'));
+        btnGoToRecover.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
+        btnsBackHome.forEach(btn => btn.addEventListener('click', () => showPage('home')));
+        
+        btnGenerateShares.addEventListener('click', () => {
+            // TODO: Add validation before switching
+            showPage('create2', 'Create Shares');
+        });
+        btnBackToCreate1.addEventListener('click', () => showPage('create1', 'Create Shares'));
+
+        btnRecoverWallet.addEventListener('click', () => {
+             // TODO: Add validation before switching
+            showPage('recover2', 'Recover Wallet');
+        });
+
+        disclaimerCheckbox.addEventListener('change', () => {
+            btnContinueToHome.disabled = !disclaimerCheckbox.checked;
+        });
+        
+        // ==========================================================================
+        // SECTION 4: DYNAMIC UI (CREATE FLOW)
+        // ==========================================================================
+        
+        /**
+         * Updates the scheme explanation box based on the selected radio button.
+         */
+        function updateSchemeDescription() {
+            const selectedValue = document.querySelector('input[name="scheme"]:checked').value;
+            const content = explanations[selectedValue];
+            schemeExplanation.innerHTML = `<h4>${content.title}</h4>${content.details}`;
+        }
+
+        /**
+         * Generates the seed word input fields for the Create page, using the cache.
+         */
+        function updateSeedWordInputs() {
+            // 1. Take a "snapshot" of the currently visible inputs and save to the cache.
+            const existingInputs = seedWordInputsContainer.querySelectorAll('input');
+            existingInputs.forEach((input, index) => {
+                if (index < createFlowWordCache.length) {
+                    createFlowWordCache[index] = input.value;
+                }
+            });
+
+            // 2. Clear and regenerate inputs.
+            seedWordInputsContainer.innerHTML = ''; 
+            for (let i = 1; i <= createWordCount; i++) {
+                const row = document.createElement('div');
+                row.className = 'seed-word-row';
+                const label = document.createElement('label');
+                label.htmlFor = `word-${i}`;
+                label.textContent = `${i}.`;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = `word-${i}`;
+                input.className = 'mono';
+                input.value = createFlowWordCache[i - 1] || ''; // 3. Restore from cache.
+                attachAutocompleteListeners(input);
+                row.appendChild(label);
+                row.appendChild(input);
+                seedWordInputsContainer.appendChild(row);
+            }
+        }
+        
+        schemeRadios.forEach(radio => radio.addEventListener('change', updateSchemeDescription));
+        
+        // ==========================================================================
+        // SECTION 5: DYNAMIC UI (RECOVER FLOW)
+        // ==========================================================================
+
+        /**
+         * Generates a complete HTML block for a single share's input fields from the cache.
+         * @param {number} shareIndex - The index of the share to generate (1-based).
+         * @returns {HTMLElement} The fully constructed div element for the share input.
+         */
+        function generateSingleRecoverShareInput(shareIndex) {
+            const cacheIndex = shareIndex - 1;
+            const shareCache = recoverFlowCache[cacheIndex];
+
+            const container = document.createElement('div');
+            container.className = 'share-input-container';
+
+            const mainHeader = document.createElement('h3');
+            mainHeader.textContent = `Share Input #${shareIndex}`;
+            container.appendChild(mainHeader);
+
+            const shareNumberGroup = document.createElement('div');
+            shareNumberGroup.className = 'form-group';
+            const labelX = document.createElement('label');
+            labelX.htmlFor = `recover-x-${shareIndex}`;
+            labelX.textContent = `Share Number (X)`;
+            const inputX = document.createElement('input');
+            inputX.type = 'text';
+            inputX.id = `recover-x-${shareIndex}`;
+            inputX.className = 'mono';
+            inputX.placeholder = 'Enter the number of this share';
+            inputX.value = shareCache.shareNumber;
+            shareNumberGroup.appendChild(labelX);
+            shareNumberGroup.appendChild(inputX);
+            container.appendChild(shareNumberGroup);
+
+            const seedGrid = document.createElement('div');
+            seedGrid.style.display = 'grid';
+            seedGrid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+            seedGrid.style.gap = '15px';
+
+            const totalWords = recoverWordCount;
+            const wordsPerChecksum = 3;
+            const numChecksums = totalWords / wordsPerChecksum;
+
+            let wordCounter = 0;
+            for (let i = 1; i <= numChecksums; i++) {
+                for (let j = 0; j < wordsPerChecksum; j++) {
+                    const row = document.createElement('div');
+                    row.className = 'seed-word-row';
+                    const label = document.createElement('label');
+                    label.textContent = `${wordCounter + 1}.`;
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'mono';
+                    input.value = shareCache.words[wordCounter] || '';
+                    attachAutocompleteListeners(input);
+                    row.appendChild(label);
+                    row.appendChild(input);
+                    seedGrid.appendChild(row);
+                    wordCounter++;
+                }
+                const row = document.createElement('div');
+                row.className = 'seed-word-row';
+                const label = document.createElement('label');
+                label.textContent = `C${i}.`;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'mono';
+                input.value = shareCache.words[wordCounter] || '';
+                attachAutocompleteListeners(input);
+                row.appendChild(label);
+                row.appendChild(input);
+                seedGrid.appendChild(row);
+                wordCounter++;
+            }
+
+            container.appendChild(seedGrid);
+            return container;
+        }
+
+        /**
+         * Clears and regenerates all share input blocks based on the selected K value.
+         */
+        function updateRecoverSharesInputs() {
+            // 1. Take a "snapshot" of the current UI state and save it to the cache.
+            const existingContainers = recoverSharesContainer.querySelectorAll('.share-input-container');
+            existingContainers.forEach((container) => {
+                const shareNumberInput = container.querySelector('[id^="recover-x-"]');
+                if (!shareNumberInput) return;
+                
+                const shareIndex = parseInt(shareNumberInput.id.split('-').pop(), 10) - 1;
+                const cacheEntry = recoverFlowCache[shareIndex];
+                
+                if (cacheEntry) {
+                    cacheEntry.shareNumber = shareNumberInput.value;
+                    const wordInputs = container.querySelectorAll('.seed-word-row input');
+                    wordInputs.forEach((input, wordIndex) => {
+                        if (wordIndex < cacheEntry.words.length) {
+                            cacheEntry.words[wordIndex] = input.value;
+                        }
+                    });
+                }
+            });
+
+            // 2. Clear and regenerate the UI.
+            recoverSharesContainer.innerHTML = '';
+            const kValue = document.querySelector('input[name="recover-k"]:checked').value;
+            const numShares = parseInt(kValue, 10);
+            for (let i = 1; i <= numShares; i++) {
+                const shareInputBlock = generateSingleRecoverShareInput(i);
+                recoverSharesContainer.appendChild(shareInputBlock);
+            }
+        }
+
+        recoverKRadios.forEach(radio => radio.addEventListener('change', updateRecoverSharesInputs));
+        
+        // ==========================================================================
+        // SECTION 6: AUTOCOMPLETE AND VALIDATION
+        // ==========================================================================
+
+        /**
+         * Attaches all necessary event listeners for autocomplete and validation to an input field.
+         * @param {HTMLInputElement} input - The input element.
+         */
+        function attachAutocompleteListeners(input) {
+            input.addEventListener('input', () => {
+                currentAutocompleteInput = input;
+                showAutocomplete(input);
+            });
+            input.addEventListener('keydown', handleAutocompleteKeydown);
+            attachValidationListener(input); // Also attach the blur validation
+        }
+
+        /**
+         * Attaches only the blur validation listener to an input field (e.g., for checksums).
+         * @param {HTMLInputElement} input - The input element.
+         */
+        function attachValidationListener(input) {
+             input.addEventListener('blur', () => {
+                setTimeout(() => {
+                    if (!autocompleteContainer.contains(document.activeElement)) {
+                        hideAutocomplete();
+                        validateInput(input);
+                    }
+                }, 150);
+            });
+        }
+
+        /**
+         * Displays and positions the autocomplete suggestion box, preferring side placement
+         * and intelligently adjusting vertically to stay within the viewport.
+         * @param {HTMLInputElement} input - The input element to position against.
+         */
+        function showAutocomplete(input) {
+            const value = input.value.toLowerCase().trim();
+            if (!value) {
+                hideAutocomplete();
+                return;
+            }
+
+            const suggestions = BIP39_WORDLIST.filter(word => word.startsWith(value));
+            if (suggestions.length === 0) {
+                hideAutocomplete();
+                return;
+            }
+
+            autocompleteContainer.innerHTML = '';
+            autocompleteContainer.addEventListener('mousemove', () => {
+                allowMouseHover = true;
+            }, { once: true });
+
+            suggestions.forEach((word, index) => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-suggestion';
+                item.textContent = word;
+                item.addEventListener('click', () => {
+                    input.value = word;
+                    hideAutocomplete();
+                    validateInput(input);
+                });
+                item.addEventListener('mouseenter', () => {
+                    if (allowMouseHover) {
+                        activeSuggestionIndex = index;
+                        const suggestionElements = autocompleteContainer.querySelectorAll('.autocomplete-suggestion');
+                        updateActiveSuggestion(suggestionElements);
+                    }
+                });
+                autocompleteContainer.appendChild(item);
+            });
+            
+            const suggestionElements = autocompleteContainer.querySelectorAll('.autocomplete-suggestion');
+            if (suggestionElements.length === 1) {
+                activeSuggestionIndex = 0;
+                updateActiveSuggestion(suggestionElements);
+            } else {
+                activeSuggestionIndex = -1;
+            }
+
+            const GAP = 8;
+            const VIEWPORT_PADDING = 10;
+            
+            autocompleteContainer.style.visibility = 'hidden';
+            autocompleteContainer.style.display = 'block';
+            const suggestionsHeight = autocompleteContainer.offsetHeight;
+            const suggestionsWidth = autocompleteContainer.offsetWidth;
+
+            const rect = input.getBoundingClientRect();
+            let top, left;
+
+            const canFitRight = rect.right + GAP + suggestionsWidth < window.innerWidth - VIEWPORT_PADDING;
+            const canFitLeft = rect.left - GAP - suggestionsWidth > VIEWPORT_PADDING;
+
+            let adjustedTop = rect.top;
+            if (adjustedTop + suggestionsHeight > window.innerHeight - VIEWPORT_PADDING) {
+                adjustedTop = window.innerHeight - suggestionsHeight - VIEWPORT_PADDING;
+            }
+            adjustedTop = Math.max(VIEWPORT_PADDING, adjustedTop);
+
+            if (canFitRight) {
+                left = rect.right + GAP;
+                top = adjustedTop;
+            } else if (canFitLeft) {
+                left = rect.left - suggestionsWidth - GAP;
+                top = adjustedTop;
+            } else {
+                const spaceBelow = window.innerHeight - rect.bottom;
+                if (spaceBelow > suggestionsHeight || spaceBelow > rect.top) {
+                    top = rect.bottom;
+                } else {
+                    top = rect.top - suggestionsHeight;
+                }
+                left = rect.left;
+            }
+
+            autocompleteContainer.style.top = `${top + window.scrollY}px`;
+            autocompleteContainer.style.left = `${left + window.scrollX}px`;
+            autocompleteContainer.style.width = suggestionsWidth ? `${suggestionsWidth}px` : 'auto';
+            autocompleteContainer.style.visibility = 'visible';
+        }
+
+        /** Hides the autocomplete suggestion box and resets its state. */
+        function hideAutocomplete() {
+            autocompleteContainer.style.display = 'none';
+            currentAutocompleteInput = null;
+            allowMouseHover = false;
+        }
+
+        /**
+         * Handles keyboard navigation (arrows, Enter, Escape, Tab) for the autocomplete box.
+         * @param {KeyboardEvent} e - The keydown event.
+         */
+        function handleAutocompleteKeydown(e) {
+            const suggestions = autocompleteContainer.querySelectorAll('.autocomplete-suggestion');
+            if (suggestions.length === 0 || autocompleteContainer.style.display === 'none') return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeSuggestionIndex++;
+                if (activeSuggestionIndex >= suggestions.length) activeSuggestionIndex = 0;
+                updateActiveSuggestion(suggestions);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeSuggestionIndex--;
+                if (activeSuggestionIndex < 0) activeSuggestionIndex = suggestions.length - 1;
+                updateActiveSuggestion(suggestions);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (activeSuggestionIndex > -1) {
+                    e.preventDefault();
+                    suggestions[activeSuggestionIndex].click();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                hideAutocomplete();
+            }
+        }
+        
+        /**
+         * Updates the visual state of the active suggestion for keyboard navigation.
+         * @param {NodeListOf<Element>} suggestions - The list of suggestion elements.
+         */
+        function updateActiveSuggestion(suggestions) {
+            suggestions.forEach((item, index) => {
+                item.classList.toggle('autocomplete-active', index === activeSuggestionIndex);
+            });
+        }
+        
+        /**
+         * Validates an input's value on blur.
+         * A valid input is a word in the BIP39 list or a number between 0-2047.
+         * @param {HTMLInputElement} input - The input element to validate.
+         */
+        function validateInput(input) {
+            const value = input.value.trim();
+            if (!value) {
+                input.classList.remove('invalid');
+                return;
+            }
+            const isWord = BIP39_WORDLIST.includes(value);
+            const isNumber = !isNaN(value) && Number(value) >= 0 && Number(value) <= 2047;
+
+            input.classList.toggle('invalid', !(isWord || isNumber));
+        }
+        
+        // ==========================================================================
+        // SECTION 7: REUSABLE UI HELPERS & GENERIC HANDLERS
+        // ==========================================================================
+
+        /**
+         * Sets up the event listeners and class toggling for a pair of 12/24 word buttons.
+         * @param {HTMLButtonElement} btn12 - The 12-words button.
+         * @param {HTMLButtonElement} btn24 - The 24-words button.
+         * @param {function(number): void} wordCountCallback - A function to call with the new word count.
+         * @param {function(): void} updateFn - The function to call to regenerate the inputs.
+         */
+        function setupWordToggle(btn12, btn24, wordCountCallback, updateFn) {
+            btn12.addEventListener('click', () => {
+                wordCountCallback(12);
+                btn12.classList.add('btn-primary');
+                btn12.classList.remove('btn-secondary');
+                btn24.classList.add('btn-secondary');
+                btn24.classList.remove('btn-primary');
+                updateFn();
+            });
+            btn24.addEventListener('click', () => {
+                wordCountCallback(24);
+                btn24.classList.add('btn-primary');
+                btn24.classList.remove('btn-secondary');
+                btn12.classList.add('btn-secondary');
+                btn12.classList.remove('btn-primary');
+                updateFn();
+            });
+        }
+        
+        /**
+         * Attaches a confirmation dialog to a "start over" button.
+         * @param {HTMLButtonElement} button - The button to attach the listener to.
+         * @param {string} title - The title for the confirmation modal.
+         * @param {string} text - The descriptive text for the confirmation modal.
+         */
+        function setupStartOverButton(button, title, text) {
+            button.addEventListener('click', async () => {
+                const confirmed = await showConfirmationModal(title, text);
+                if (confirmed) {
+                    window.location.reload();
+                }
+            });
+        }
+        
+        setupWordToggle(btn12Words, btn24Words, (count) => { createWordCount = count; }, updateSeedWordInputs);
+        setupWordToggle(recoverBtn12Words, recoverBtn24Words, (count) => { recoverWordCount = count; }, updateRecoverSharesInputs);
+        
+        setupStartOverButton(
+            btnStartOverCreate,
+            'Are you sure?',
+            'All entered data and generated shares will be lost forever. This action cannot be undone.'
+        );
+        setupStartOverButton(
+            btnStartOverRecover,
+            'Are you sure?',
+            'All recovered data will be lost forever. This action cannot be undone.'
+        );
+
+        // ==========================================================================
+        // SECTION 8: CUSTOM MODAL
+        // ==========================================================================
+        
+        let modalResolve = null;
+
+        /**
+         * Displays a custom confirmation modal and returns a promise that resolves on user action.
+         * @param {string} title - The title to display in the modal.
+         * @param {string} text - The body text to display in the modal.
+         * @returns {Promise<boolean>} A promise that resolves to `true` if confirmed, `false` otherwise.
+         */
+        function showConfirmationModal(title, text) {
+            modalTitle.textContent = title;
+            modalText.textContent = text;
+            modal.style.display = 'flex';
+            return new Promise((resolve) => {
+                modalResolve = resolve;
+            });
+        }
+
+        modalConfirmBtn.addEventListener('click', () => {
+            if (modalResolve) modalResolve(true);
+            modal.style.display = 'none';
+        });
+
+        modalCancelBtn.addEventListener('click', () => {
+            if (modalResolve) modalResolve(false);
+            modal.style.display = 'none';
+        });
+
+        // ==========================================================================
+        // SECTION 9: ONLINE STATUS CHECKER
+        // ==========================================================================
+        
+        /**
+         * Checks the browser's online status and updates the UI indicator accordingly.
+         */
+        function updateOnlineStatus() {
+            if (navigator.onLine) {
+                connectionStatusEl.textContent = 'YOU ARE ONLINE - STOP NOW!';
+                connectionStatusEl.className = 'connection-status online';
+            } else {
+                connectionStatusEl.textContent = 'no internet detected';
+                connectionStatusEl.className = 'connection-status offline';
+            }
+        }
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        // ==========================================================================
+        // SECTION 10: INITIALIZATION
+        // ==========================================================================
+        
+        /**
+         * This listener fires when the document is fully loaded.
+         * It's used to set up the initial state of the application.
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('creation-date').valueAsDate = new Date();
+            
+            updateSchemeDescription();
+            updateSeedWordInputs();
+            updateRecoverSharesInputs();
+
+            updateOnlineStatus();
+        });
+
+        // ==========================================================================
+        // SECTION 11: CORE CRYPTO LOGIC (TO BE IMPLEMENTED)
+        // ==========================================================================
+        
+        // Content for the dynamic scheme explanation box.
+        const explanations = {
+            '2of3': {
+                title: '2-of-3 Scheme (Ideal for couples)',
+                details: `<p><strong>Total Shares:</strong> 3</p><p><strong>Required for Recovery:</strong> 2</p><p><strong>Fault Tolerance:</strong> You can lose 1 share and still recover your wallet.</p><p><strong>Use Case:</strong> Perfect for a couple with no direct heirs. Each person keeps one share, and the third is stored in a safe or secure location. Recovery can be performed by either person by accessing the secure share.</p>`
+            },
+            '2of4': {
+                title: '2-of-4 Scheme (Geographic Flexibility)',
+                details: `<p><strong>Total Shares:</strong> 4</p><p><strong>Required for Recovery:</strong> 2</p><p><strong>Fault Tolerance:</strong> You can lose up to 2 shares.</p><p><strong>Use Case:</strong> Great for an individual who wants geographic redundancy. You can store one share at home, one at the office, one in a safe deposit box, and another with a trusted family member. You only need two to recover.</p>`
+            },
+            '3of5': {
+                title: '3-of-5 Scheme (Corporate Sovereignty)',
+                details: `<p><strong>Total Shares:</strong> 5</p><p><strong>Required for Recovery:</strong> 3</p><p><strong>Fault Tolerance:</strong> You can lose up to 2 shares.</p><p><strong>Use Case:</strong> Ideal for businesses, DAOs, or large families. It requires a quorum of 3 people to approve recovery, preventing a single malicious (or coerced) individual from accessing the funds alone.</p>`
+            }
+        };
+
+        // Truncated BIP39 English word list (first 12 and last 12)
+        const BIP39_WORDLIST = [
+            'abandon', 'ability', 'able', 'about', 'above', 'absent',
+            'absorb', 'abstract', 'absurd', 'abuse', 'access', 'accident',
+            // ... (full list would go here)
+            'zone', 'zoo', 'zulu'
+        ];
+    </script>
+
+    <!-- ==========================================================================
+    THEME TOGGLE SCRIPT
+    - A simple, self-contained script for toggling between light and dark themes.
+    ========================================================================== -->
+    <script>
+        /**
+         * Toggles the 'data-theme' attribute on the body to switch between themes.
+         */
+        function toggleTheme() {
+            const body = document.body;
+            const icon = document.getElementById('toggle-icon');
+            const text = document.getElementById('toggle-text');
+            if (body.getAttribute('data-theme') === 'light') {
+                body.removeAttribute('data-theme');
+                icon.textContent = '☀️';
+                text.textContent = 'Light Mode';
+            } else {
+                body.setAttribute('data-theme', 'light');
+                icon.textContent = '🌙';
+                text.textContent = 'Dark Mode';
+            }
+        }
+    </script>
 </body>
 </html>
