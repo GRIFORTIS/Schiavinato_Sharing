@@ -1,5 +1,12 @@
 ## Security Policy for Schiavinato Sharing
 
+Schiavinato Sharing follows the **organization-wide GRIFORTIS security policy** for reporting vulnerabilities and handling sensitive findings:
+
+- See the canonical policy in the `.github` repository:  
+  **[`GRIFORTIS/.github/SECURITY.md`](https://github.com/GRIFORTIS/.github/blob/main/SECURITY.md)**
+
+The sections below provide Schiavinato Sharing–specific context and should be read together with the organization-wide policy.
+
 Schiavinato Sharing is intended to help users protect real assets. We take potential security issues seriously and ask that you follow this policy when reporting vulnerabilities or subtle failure modes.
 
 ---

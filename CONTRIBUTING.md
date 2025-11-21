@@ -1,5 +1,11 @@
 ## Contributing to Schiavinato Sharing
 
+This project follows the organization-wide GRIFORTIS contributing guidelines. For canonical rules, see:
+
+- **[`GRIFORTIS/.github/CONTRIBUTING.md`](https://github.com/GRIFORTIS/.github/blob/main/CONTRIBUTING.md)**
+
+The sections below provide additional, project-specific notes and legacy detail for Schiavinato Sharing.
+
 Thank you for your interest in contributing to the Schiavinato Sharing project. This repository currently focuses on the **whitepaper** and related reference materials for a human-executable BIP39 mnemonic sharing scheme.
 
 Because this work touches real financial security, we ask contributors to adhere to the following guidelines.
