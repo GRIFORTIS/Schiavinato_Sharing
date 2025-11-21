@@ -42,7 +42,7 @@ To achieve these goals, Schiavinato Sharing transposes Shamir's Secret Sharing f
 
 This document presents Schiavinato Sharing as a **proposed construction** and reference design. While its security reduces to well-understood components (Shamir's Secret Sharing in a prime field and standard BIP39 assumptions), the scheme itself, its human workflows, and any concrete implementations **require independent review, testing, and peer scrutiny**.
 
-At the time of writing, Schiavinato Sharing and any GRIFORTIS reference tools that implement it should be regarded as **experimental and unaudited**. They are appropriate for education, testing, and community review, but **are not yet recommended for securing significant real-world holdings** without additional independent analysis.
+At the time of writing, Schiavinato Sharing and any GRIFORTIS reference tools that implement it should be regarded as **experimental and unaudited**. They are appropriate for education, testing, and community review, but **are not yet recommended for securing significant real-world holdings** without additional independent analysis or professional review.
 
 In particular:
 
