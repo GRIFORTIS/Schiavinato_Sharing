@@ -36,6 +36,12 @@ Equivalently, the BIP39 English mnemonic is:
 spin result brand ahead poet carpet unusual chronic denial festival toy autumn
 ```
 
+And the list of number is:
+
+```text
+1679, 1470, 216, 41, 1337, 278, 1906, 323, 467, 681, 1843, 125
+```
+
 These are grouped into 4 rows of 3:
 
 - Row 1: $(w_1, w_2, w_3)$  
@@ -57,11 +63,17 @@ This yields:
 - $c_3 = (1906 + 323 + 467) \bmod 2053 = 643$  
 - $c_4 = (681 + 1843 + 125) \bmod 2053 = 596$
 
+The list of number for all row checksumis:
+
+```text
+1312, 1656, 643, 596
+```
+
 ### 1.3 Master checksum
 
 The master checksum is:
 ```text
-M = (w_1 + \dots + w_{12}) mod 2053
+M = (w_1 + ... + w_{12}) mod 2053
 ```
 
 Summing the values above and reducing modulo 2053 gives:
@@ -111,6 +123,11 @@ The resulting coefficients $(a_0, a_1)$ are:
 - $c_3$: $a_0 = 643$, $a_1 = 108$  
 - $c_4$: $a_0 = 596$, $a_1 = 814$  
 - $M$: $a_0 = 101$, $a_1 = 1718$
+
+List of all random coefficients:
+```text
+456, 102, 1126, 1003, 914, 571, 419, 356, 1728, 130, 122, 383, 895, 952, 108, 814, 1718
+```
 
 An implementation can regenerate these polynomials and verify that:
 
