@@ -11,6 +11,10 @@ The goal of this project is to document and eventually provide reference materia
 ## Contents
 
 - `WHITEPAPER.md` – full technical description of the Schiavinato BIP39 mnemonic sharing scheme.
+- `TEST_VECTORS.md` – reproducible \(GF(2053)\) test vector for a 2-of-3, 12-word example.
+- `CONTRIBUTING.md` – guidelines for suggesting changes, reference implementations, and reviews.
+- `SECURITY.md` – how to report vulnerabilities or subtle failure modes responsibly.
+- `LICENSE` and `LICENSE-WHITEPAPER.md` – licensing terms for code and the whitepaper, respectively.
 
 Additional resources (reference implementations, examples, or tooling) may be added to this repository in the future.
 
@@ -20,6 +24,7 @@ Additional resources (reference implementations, examples, or tooling) may be ad
 
 - **Read the scheme**: start with `WHITEPAPER.md` for the full mathematical and conceptual description.
 - **Discuss or ask questions**: open a GitHub issue in this repository if you have questions, suggestions, or find mistakes in the document.
+- **Validate implementations**: use `TEST_VECTORS.md` to confirm that your sharing and recovery code matches the reference arithmetic in \(GF(2053)\).
 
 If you build an implementation based on this scheme, consider linking back to this repository in your project’s documentation.
 

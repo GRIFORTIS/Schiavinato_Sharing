@@ -36,7 +36,7 @@ Equivalently, the BIP39 English mnemonic is:
 spin result brand ahead poet carpet unusual chronic denial festival toy autumn
 ```
 
-And the list of number is:
+And the list of numbers is:
 
 ```text
 1679, 1470, 216, 41, 1337, 278, 1906, 323, 467, 681, 1843, 125
@@ -63,7 +63,7 @@ This yields:
 - $c_3 = (1906 + 323 + 467) \bmod 2053 = 643$  
 - $c_4 = (681 + 1843 + 125) \bmod 2053 = 596$
 
-The list of number for all row checksumis:
+The list of numbers for all row checksums is:
 
 ```text
 1312, 1656, 643, 596

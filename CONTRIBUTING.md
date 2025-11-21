@@ -15,6 +15,7 @@ Because this work touches real financial security, we ask contributors to adhere
 - **Technical validation**  
   - Check the mathematical arguments and derivations for correctness.  
   - Verify examples, tables (e.g., pre-computed coefficients), and worked calculations.
+  - Use `TEST_VECTORS.md` as a concrete \(GF(2053)\) test case for sharing and recovery logic.
 
 - **Reference implementations and tooling**  
   - Propose or build small, auditable tools that implement parts of the scheme (e.g., GF(2053) arithmetic, Lagrange coefficient calculators, or worksheet generators).  
