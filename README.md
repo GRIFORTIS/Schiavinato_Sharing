@@ -3,7 +3,6 @@
 This repository hosts the whitepaper:
 
 > **“Schiavinato Sharing: Human-Executable Secret Sharing for BIP39 Mnemonics”**
-https://github.com/GRIFORTIS/Schiavinato_Sharing/blob/main/WHITEPAPER.md
 
 - **[`GRIFORTIS/Schiavinato_Sharing/WHITEPAPER.md`](https://github.com/GRIFORTIS/Schiavinato_Sharing/blob/main/WHITEPAPER.md)**
 
