@@ -42,6 +42,8 @@ To achieve these goals, Schiavinato Sharing transposes Shamir's Secret Sharing f
 
 This document presents Schiavinato Sharing as a **proposed construction** and reference design. While its security reduces to well-understood components (Shamir's Secret Sharing in a prime field and standard BIP39 assumptions), the scheme itself, its human workflows, and any concrete implementations **require independent review, testing, and peer scrutiny**.
 
+At the time of writing, Schiavinato Sharing and any GRIFORTIS reference tools that implement it should be regarded as **experimental and unaudited**. They are appropriate for education, testing, and community review, but **are not yet recommended for securing significant real-world holdings** without additional independent analysis.
+
 In particular:
 
 - The mathematics is conventional, but subtle implementation bugs, user-interface flaws, or misunderstandings of the procedures can still cause **permanent loss of funds**.
@@ -314,6 +316,28 @@ Consequently, Schiavinato Sharing leaves passphrase policy to wallet software an
 ---
 
 ### **4. Security Analysis**
+
+#### 4.0 Threat Model and Scope
+
+Schiavinato Sharing is intended to protect the secrecy and recoverability of a BIP39 mnemonic under the following assumptions:
+
+- An adversary may obtain, copy, or inspect **fewer than \(k\)** distinct shares for a given wallet, but not \(k\) or more shares.  
+- Legitimate participants can coordinate to obtain **at least \(k\)** valid shares when recovery is required.  
+- Share documents, once created, are not silently modified in a way that systematically alters multiple values while preserving all arithmetic checksums.
+
+Within this model, the goals of the scheme are:
+
+- **Confidentiality**: Any set of fewer than \(k\) shares should reveal no information about the underlying BIP39 mnemonic beyond what is already implied by its domain (approximately \(2^{256}\) possibilities).  
+- **Integrity of recovery**: Given at least \(k\) honest shares, the combination of row-level checks and the master verification number should detect accidental arithmetic or transcription errors with overwhelmingly high probability.
+
+The following aspects are **explicitly out of scope** for this paper:
+
+- Side-channel attacks on software implementations (timing, cache behavior, hardware faults, etc.).  
+- Attacks in which an adversary compromises **\(k\) or more** distinct shares or tampers with the physical custody of shares (for example, coercion of heirs, theft of multiple safe-deposit boxes, or long-term insider threats).  
+- Social-engineering attacks against users, executors, or advisors, including attempts to trick them into revealing mnemonics, passphrases, or multiple shares.  
+- Attacks on the underlying BIP39 ecosystem, including weaknesses in wallet RNGs, key-derivation functions, or downstream cryptographic protocols.
+
+Under these assumptions, the analysis below focuses on the cryptographic properties inherited from Shamir's scheme and on the additional human-factor defenses introduced by Schiavinato Sharing.
 
 #### 4.1 Security Properties and Information-Theoretic Guarantees
 
