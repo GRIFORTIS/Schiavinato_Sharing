@@ -69,9 +69,9 @@ The list of numbers for all row checksums is:
 1312, 1656, 643, 596
 ```
 
-### 1.3 Master checksum
+### 1.3 Master verification number
 
-The master checksum is:
+The master verification number is:
 ```text
 M = (w_1 + ... + w_{12}) mod 2053
 ```
@@ -84,7 +84,7 @@ In total we have 17 secrets:
 
 - 12 word indices $w_1, \dots, w_{12}$  
 - 4 row checksums $c_1, \dots, c_4$  
-- 1 master checksum $M$
+- 1 master verification number $M$
 
 ---
 
@@ -266,8 +266,8 @@ An independent implementation can use this test vector to validate both **sharin
    - Apply them to the corresponding share values for each secret to recover `a_0`.  
    - Confirm that the recovered `a_0` matches the original secrets `{w_i}, {c_r}, M`.
 
-4. **Check row and master checksums**  
-   - Using the recovered word indices, recompute the row checksums and master checksum in `GF(2053)` and verify that they equal `{c_r}` and `M` respectively.
+4. **Check row and master verification values**  
+   - Using the recovered word indices, recompute the row checksums and the master verification number in `GF(2053)` and verify that they equal `{c_r}` and `M` respectively.
 
 ---
 

@@ -905,7 +905,7 @@ This appendix sketches example ways to deploy Schiavinato Sharing in practice. T
 As a rule of thumb:
 
 - Keep $n$ small enough that all share locations can be **named and documented** clearly.  
-- Use additional layers (for example, a separate BIP39 passphrase, or independent wallets) rather than extremely large \(n\) to express complex policies.
+- Use additional layers (for example, a separate BIP39 passphrase, or independent wallets) rather than extremely large $n$ to express complex policies.
 
 #### F.6 Alignment with the “We Instruct, You Execute” Model
 
@@ -953,8 +953,8 @@ For each random coefficient you need:
    - This calculation only requires repeated multiplication by 6 and addition.
 
 3. **Apply an acceptance test**  
-   - If \(N \ge 6159\), **reject** this attempt and go back to step 1 (roll all 5 dice again).  
-   - If \(N \le 6158\), **accept** the attempt and proceed.
+   - If $N \ge 6159$, **reject** this attempt and go back to step 1 (roll all 5 dice again).  
+   - If $N \le 6158$, **accept** the attempt and proceed.
 
 4. **Reduce modulo 2053**  
    - Compute
@@ -968,4 +968,4 @@ For each random coefficient you need:
    - The final value $s$ is your random coefficient in $GF(2053)$.  
    - Record it as an integer in $\{0, ..., 2052\}$.
 
-Because the acceptance probability is \(6159/7776 \approx 79\%\), only about one in five 5-dice attempts needs to be discarded. All arithmetic operations are limited to addition, subtraction, and multiplication by 6 and by small integers, keeping the procedure within the reach of careful pencil-and-paper workflows.
+Because the acceptance probability is $6159/7776 \approx 79\%$, only about one in five 5-dice attempts needs to be discarded. All arithmetic operations are limited to addition, subtraction, and multiplication by 6 and by small integers, keeping the procedure within the reach of careful pencil-and-paper workflows.
