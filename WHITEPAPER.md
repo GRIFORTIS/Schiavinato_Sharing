@@ -1,5 +1,5 @@
-### **Title:** The Schiavinato BIP39 Mnemonic Sharing Scheme: An Arithmetic Approach to Secret Sharing
-### **Subtitle:** A Pencil-and-Paper Methodology for Resilient BIP39 Inheritance and Disaster Recovery
+### **Title:** Schiavinato Sharing: Human-Executable Secret Sharing for BIP39 Mnemonics
+### **Subtitle:** A Pencil-and-Paper Arithmetic Scheme for Inheritance and Disaster Recovery
 
 ---
 

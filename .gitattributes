@@ -1,0 +1,6 @@
+* text=auto
+
+*.md diff=markdown
+*.txt text
+
+
