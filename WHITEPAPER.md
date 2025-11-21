@@ -38,6 +38,23 @@ Schiavinato Sharing is designed to remove this dependency on trusted electronics
 
 To achieve these goals, Schiavinato Sharing transposes Shamir's Secret Sharing from extension fields $GF(2^n)$ to a small prime field $GF(2053)$ and operates directly on BIP39 word indices. It further introduces a two-layer arithmetic checksum mechanism to detect human calculation errors during manual recovery.
 
+#### 1.4 Status and Responsible Use
+
+This document presents Schiavinato Sharing as a **proposed construction** and reference design. While its security reduces to well-understood components (Shamir's Secret Sharing in a prime field and standard BIP39 assumptions), the scheme itself, its human workflows, and any concrete implementations **require independent review, testing, and peer scrutiny**.
+
+In particular:
+
+- The mathematics is conventional, but subtle implementation bugs, user-interface flaws, or misunderstandings of the procedures can still cause **permanent loss of funds**.
+- No whitepaper or reference implementation, including this one, should be treated as a substitute for careful threat modelling, operational planning, and, where appropriate, professional advice.
+
+Early adopters are encouraged to:
+
+- Start with **modest amounts** and well-documented drills before entrusting a large fraction of long-term savings to any new scheme.
+- Treat the GRIFORTIS tools as **reference implementations**, not as the only or final word on how the scheme should be realized in software.
+- Report issues, ambiguities, or suspected vulnerabilities through the project’s responsible disclosure channels so that the design and documentation can be improved over time.
+
+Nothing in this paper constitutes financial, legal, or tax advice. Users remain responsible for their own operational and regulatory choices.
+
 ---
 
 ### **2. Background: The Mathematical Foundations**
@@ -221,6 +238,16 @@ Each individual share document (corresponding to a fixed index $x \in \{1, ..., 
 
 This consistent layout allows the user to treat each row as a self-contained unit during recovery: recover three words and one checksum, verify them immediately, and then proceed to the next row. By the time the final row is completed and the master sum verified, the user has a high degree of assurance that all arithmetic has been performed correctly.
 
+Because each share document displays multiple BIP39 words, there is a risk that an uninformed or overconfident user (or heir) might mistake a **single worksheet** for a complete wallet backup and attempt to type its word column directly into a wallet application. To reduce this confusion, the reference layout includes explicit visual cues:
+
+- A prominent header warning on every worksheet, such as:  
+  > **This is 1 of N shares for a wallet. Alone, it cannot recover funds. Do not enter this list into a wallet.**
+- Clear labeling of the threshold and share index (e.g., "3-of-5 scheme, Share #2 of 5") in the header.
+- A tabular structure with a dedicated checksum column, which visually distinguishes the document from a simple mnemonic list.
+- Numeric-only entries for any values in 2048–2052, which signal that the worksheet is an intermediate arithmetic artifact rather than a standard wallet phrase.
+
+The reference implementation MAY further bias coefficient selection so that each physical worksheet is likely to contain at least one visible numeric-only entry, without altering the underlying security properties of Shamir's scheme. This mild aesthetic constraint on randomness is purely a usability measure: it makes each share look less like a valid standalone BIP39 mnemonic while preserving information-theoretic secrecy and interoperability of the final recovered phrase.
+
 #### 3.7 The Role of Lagrange Coefficients
 
 A key enabler of manual recovery is the use of pre-computed Lagrange coefficients. For fixed share indices $(x_1, ..., x_k)$, each coefficient $\gamma_j$ is defined as
@@ -274,6 +301,16 @@ Schiavinato Sharing operates on standard BIP39 word indices and does not alter t
 
 As a result, any recovered mnemonic that consists solely of indices in 0–2047 is a standard BIP39 phrase and is accepted by existing wallets without modification. The underlying entropy and checksum semantics of BIP39 are preserved.
 
+The BIP39 specification also defines an **optional passphrase** (sometimes informally called the "25th word") that is combined with the mnemonic in a key-stretching step to derive the wallet seed. This passphrase is *not* part of the mnemonic phrase itself: two users with the same 12/24-word phrase but different passphrases derive unrelated seeds. Schiavinato Sharing deliberately treats the passphrase as an independent layer and does not attempt to shard or encode it.
+
+From the perspective of this scheme:
+
+- **Scope separation**: Because the passphrase is external to the mnemonic word sequence, including it in the arithmetic sharing of word indices would blur a clean boundary in the BIP39 model and complicate interoperability with existing wallets.
+- **Passphrase strength and independence**: A BIP39 passphrase is most effective when it behaves as a separate, high-entropy secret. Folding it into the 24-word structure—so that "one set of shares reconstructs both phrase and passphrase"—would weaken this separation and diminish the security value of a strong passphrase.
+- **Plausible deniability**: Many users rely on a passphrase to implement plausible deniability (for example, a decoy wallet with no passphrase and a hidden wallet with a strong passphrase). Hard-wiring the passphrase into the same shared structure as the mnemonic would make such policies harder to reason about and less flexible.
+
+Consequently, Schiavinato Sharing leaves passphrase policy to wallet software and to the user's operational model. For long-term backup and inheritance planning, practitioners should carefully assess whether a BIP39 passphrase is necessary, and, if so, how its secret value will be communicated or escrowed to heirs (if at all). A rigorous treatment of passphrase design, plausible deniability, and inheritance workflows is beyond the scope of this paper and is best handled as a dedicated topic building on, but distinct from, the arithmetic scheme described here.
+
 ---
 
 ### **4. Security Analysis**
@@ -303,6 +340,8 @@ The two-layer checksum mechanism described in Section 3.5 is designed to mitigat
 Under the same random-error model discussed in Section 3.5, the probability that an incorrect row passes its checksum test is at most $1/2053$, and the probability that such errors also preserve the master sum is at most another factor of $1/2053$. With an additional independence assumption across rows this yields an overall error-escape probability on the order of $(1/2053)^9$; even without that assumption, the per-row-plus-master bound of $1/2053^2$ is already so small as to be negligible in practice.
 
 From a usability perspective, the design offers a favorable trade-off: users perform only familiar operations (addition, multiplication, reduction) and receive immediate feedback at the row level, significantly reducing the cognitive load and the risk of silent failure.
+
+A distinct human-factor concern is the temptation to treat a single share as if it were a complete BIP39 mnemonic. Because individual worksheets may display only indices in 0–2047, a naive user could, in principle, enter the word column of a single share into a wallet. Cryptographically, this does not weaken the scheme: any one share remains information-theoretically useless for recovering the true wallet, and if accepted at all, such input would at best open an unrelated empty wallet. However, this behavior could mislead heirs or operators about the existence of additional shares. Schiavinato Sharing addresses this by (i) emphasizing, in documentation and on the worksheets themselves, that no single share is a valid wallet backup, and (ii) using layout and numeric-only markers to make each share look deliberately unlike a canonical mnemonic. In adversarial settings, this behavior can even support plausible deniability: an attacker holding only one share learns no more than that they possess a random-looking set of BIP39-compatible words and numbers, not a deterministically loaded wallet.
 
 #### 4.3 Physical Security Assumptions
 
@@ -691,4 +730,194 @@ This confirms that the recovered secrets and the checksum are internally consist
 
 In the actual Schiavinato Sharing scheme, all arithmetic is performed in $GF(2053)$ and Lagrange coefficients are derived once from a precise specification, but the pattern of computation is exactly the same as in this toy example. Users performing manual recovery follow this pattern row by row, using pre-computed coefficients appropriate to their chosen threshold scheme.
 
+---
+
+### **Appendix E: Heir Instructions and Practical Recovery Guide**
+
+This appendix is written for heirs and non-specialist executors who may encounter Schiavinato Sharing documents during an inheritance or disaster recovery process. It summarizes the essential facts in plain language.
+
+#### E.1 What These Papers Are
+
+- The documents labeled as **Schiavinato Sharing** are **shares** of a Bitcoin (or other cryptocurrency) wallet backup.
+- Each sheet is **only one part** of the backup. By design, a single sheet **cannot** reveal or spend the funds.
+- The original wallet was protected by a **BIP39 recovery phrase** (a list of 12 or 24 words). Schiavinato Sharing breaks that phrase into multiple shares so that only a group of them together can reconstruct it.
+
+If you have been given these documents as part of an estate, you should assume that the owner intended at least some of them to be combined to restore access to funds.
+
+#### E.2 What You Need to Recover the Wallet
+
+- The owner chose numbers **k** and **n**:
+  - **n** = total number of shares that exist.
+  - **k** = minimum number of different shares required to recover the wallet.
+- This is usually written as a **“k-of-n” scheme** (for example, “3-of-5”).
+
+To have a realistic chance of recovery, you must:
+
+- Collect at least **k different shares** for the same wallet (same wallet name, creation date, and k-of-n scheme).
+- Ensure the shares are genuine and have not obviously been tampered with.
+
+If you only have **one share**, you do **not** have enough information to reconstruct the wallet, no matter how you manipulate that one sheet.
+
+#### E.3 What Not to Do
+
+- **Do not** type the words from a single share into a wallet app as if they were a complete recovery phrase.
+  - At best, you will see an unrelated empty wallet.
+  - At worst, you may be misled into thinking there were never any funds protected by these shares.
+- **Do not** assume that a sheet that “looks like” a 24-word list is safe to use directly; in Schiavinato Sharing, each sheet is an **incomplete fragment** of a larger secret.
+- **Do not** discard other shares after testing a single one and seeing no balance. Recovery requires **combining** multiple shares.
+
+If you are unsure, stop and consult a qualified professional before interacting with any wallet software or moving funds.
+
+#### E.4 How Recovery Typically Works
+
+The exact steps depend on the tools available, but the general pattern is:
+
+1. **Gather the necessary shares**:  
+   Collect at least **k** distinct share documents with matching wallet name, creation date (if present), and k-of-n scheme.
+2. **Choose a recovery method**:  
+   - If a trusted **offline recovery tool** (such as the GRIFORTIS reference HTML tool) is available, follow its on-screen instructions.
+   - If you are working with a security professional, they should **guide you** through the reconstruction process while you retain physical control of all shares and perform any typing or arithmetic yourself.
+3. **Reconstruct the mnemonic**:  
+   The tool or expert will:
+   - Combine the numbers on the worksheets using a defined set of arithmetic rules.
+   - Use built-in checksums to verify that no mistakes occurred.
+   - Produce a standard **BIP39 recovery phrase** (for example, 24 English words).
+4. **Use the recovered mnemonic carefully**:  
+   - The recovered phrase is extremely sensitive. Anyone who sees it can, in principle, move the funds.
+   - It should only be entered into a wallet in a controlled, preferably offline or hardware-secured, environment.
+
+You should keep all original share documents safe until you are certain that the estate’s intentions have been fully carried out.
+
+#### E.5 About Passphrases (“25th Word”)
+
+The original wallet may or may not have used an extra **BIP39 passphrase**, sometimes called the “25th word.” This passphrase:
+
+- Is **not written on the Schiavinato Sharing worksheets**.
+- Is a separate secret that changes the wallet derived from the same 12/24-word phrase.
+
+If a strong passphrase was used and is not known or documented anywhere, it may be impossible to recover the exact wallet, even with all the shares. Estate planning around passphrases is outside the scope of this appendix; executors should treat any mention of an additional passphrase in other documents with great care.
+
+#### E.6 When to Seek Help
+
+If any of the following are true, professional assistance is strongly recommended:
+
+- You do not clearly understand the difference between **shares** and a complete **recovery phrase**.
+- You have **fewer than k shares** and are unsure whether more exist.
+- You suspect that shares may have been lost, destroyed, or tampered with.
+- The value protected by the wallet is significant relative to your risk tolerance.
+
+In such cases, consult a professional who is familiar with BIP39, threshold secret sharing, and inheritance procedures. Their role should be advisory: they explain the process, help you avoid mistakes, and may verify your arithmetic, but **you** keep custody of the shares and perform all sensitive actions (such as entering recovery phrases into devices or printing new shares). As a rule of thumb, aim for a process where the specialist could walk away after the session knowing **how** you recovered the wallet but not possessing any secrets that would allow them to do it themselves later.
+
+---
+
+### **Appendix F: Deployment Patterns and Real-World Scenarios**
+
+This appendix sketches example ways to deploy Schiavinato Sharing in practice. These patterns are not prescriptions; they are starting points for discussion with clients and advisors.
+
+#### F.1 Single User with Geographic Redundancy (2-of-3)
+
+- **Profile**: technically comfortable individual, moderate holdings, no complex heirs.  
+- **Scheme**: 2-of-3.  
+- **Distribution**:
+  - Share #1 in a home safe.  
+  - Share #2 in a bank safe-deposit box (or equivalent secure facility).  
+  - Share #3 with a trusted relative or stored in a second location.
+
+**Rationale**:
+
+- Any single location loss (fire, theft, flood, bank issue) does not destroy the wallet.  
+- An attacker must compromise at least **two** independent locations.  
+- The owner alone can recover using any two shares without involving third parties.
+
+**Operational notes**:
+
+- Avoid keeping two shares side by side in the same container.  
+- Document locations and access instructions clearly in non-secret estate paperwork.
+
+#### F.2 Couple Without Heirs, 2-of-4 with Personal Redundancy
+
+- **Profile**: couple with no planned heirs (or heirs not expected to manage this wallet), focused on resilience during their lifetimes and optional joint recovery in severe events.  
+- **Scheme**: 2-of-4.  
+- **Distribution (one example)**:
+  - Share #1 with Partner A, stored in a **home safe**.  
+  - Share #2 with Partner A, stored in a **work or office safe** (separate building).  
+  - Share #3 with Partner B, stored in a **home safe** (which may or may not be the same as Partner A’s).  
+  - Share #4 with Partner B, stored in a **work or office safe** (separate building).
+
+**Rationale**:
+
+- Each partner alone can typically recover in a crisis by accessing **two locations** they control (for example, home + office).  
+- A single physical disaster (house fire, office burglary) is unlikely to destroy all four shares at once.  
+- No third party (lawyer, bank, consultant) ever needs to see a share; the entire scheme is contained within the couple’s own environments.
+
+**Operational notes**:
+
+- Treat home and office as genuinely separate security domains (different keys, alarms, access policies).  
+- Avoid casually copying shares into digital form (photos, cloud scans); the strength of this pattern depends on keeping the paper trail small, well controlled, and clearly labelled.  
+- If the couple later decides to involve heirs or charities, they can retire this 2-of-4 arrangement and establish a new scheme (for example, a 3-of-5 pattern as in the next subsection) by **reconstructing the mnemonic and re-sharing it**. The mathematical construction remains the same, but the physical shares, locations, and participants are deliberately redesigned.
+
+#### F.3 Couple with Heirs and Executor (3-of-5)
+
+- **Profile**: couple planning for multi-decade inheritance, moderate-to-high holdings.  
+- **Scheme**: 3-of-5.  
+- **Distribution (one example)**:
+  - Share #1 with Partner A (home safe).  
+  - Share #2 with Partner B (home safe or separate safe).  
+  - Share #3 with a trusted executor or attorney.  
+  - Share #4 in a bank safe-deposit box.  
+  - Share #5 in a geographically distant secure location or with a second trusted family member.
+
+**Rationale**:
+
+- During life, either partner can typically assemble 3 shares without granting any outsider independent control.  
+- After death or incapacity, heirs and executor can collaborate to bring together 3 of 5 without any single person holding unilateral power.  
+- Loss of one or even two shares is tolerable without immediate emergency.
+
+**Operational notes**:
+
+- Carefully document who is expected to participate in recovery (partners, executor, specific heirs).  
+- Make expectations clear that no single professional (e.g., funeral home, lawyer, consultant) should ever hold 3 shares at once.
+
+#### F.4 Social Recovery with Friends or Colleagues (k-of-n ≥ 2-of-3)
+
+- **Profile**: privacy-conscious individual with trusted social circle but no desire to rely on institutions.  
+- **Scheme**: 2-of-3, 3-of-5, or similar.  
+- **Distribution**:
+  - One or two shares kept by the owner.  
+  - Remaining shares held by carefully chosen friends or colleagues.
+
+**Rationale**:
+
+- Reduces dependency on formal institutions.  
+- Encourages explicit, documented trust relationships and recovery plans.
+
+**Risks and mitigations**:
+
+- Social relationships can change; review share assignments over time.  
+- For contentious families or business partners, consider involving a neutral professional who participates **advisory-only** (no custody of shares).
+
+#### F.5 When Not to Use Very Large \(n\)
+
+- Large \(n\) (for example, 2-of-10 or 3-of-12) can seem attractive, but in practice:
+  - Tracking many physical documents increases the chance of loss, theft, or confusion.  
+  - Heirs may struggle to locate enough valid shares decades later.
+
+As a rule of thumb:
+
+- Keep \(n\) small enough that all share locations can be **named and documented** clearly.  
+- Use additional layers (for example, a separate BIP39 passphrase, or independent wallets) rather than extremely large \(n\) to express complex policies.
+
+#### F.6 Alignment with the “We Instruct, You Execute” Model
+
+Across all patterns above, a central operational principle is:
+
+- **Advisors design; clients execute.**
+
+In practice, this means:
+
+- Advisors help choose \(k\), \(n\), locations, and processes.  
+- Clients (or trusted family members) **enter the mnemonic**, run the tools, and print or transcribe shares.  
+- Professionals are present for planning and verification, but do not walk away with enough information to reconstruct the wallet on their own.
+
+This division of roles aligns Schiavinato Sharing with an ethos of user empowerment and minimized custodial trust.
 
