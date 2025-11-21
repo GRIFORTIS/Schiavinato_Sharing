@@ -169,6 +169,11 @@
             margin-bottom: 30px;
         }
 
+        .page-focus {
+            box-shadow: 0 0 0 2px var(--cyber-gold), 0 4px 20px var(--shadow-color);
+            transition: box-shadow 0.4s ease;
+        }
+
         .section-heading {
             margin-bottom: 1.5rem;
         }
@@ -458,6 +463,64 @@
             text-align: center;
         }
 
+        .page {
+            margin-bottom: 30px;
+        }
+
+        .consent-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 1rem 0;
+            font-weight: 600;
+        }
+
+        .consent-checkbox input {
+            width: 20px;
+            height: 20px;
+        }
+
+        .home-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .workflow-card {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: left;
+            background: rgba(0,0,0,0.15);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        [data-theme="light"] .workflow-card {
+            background: rgba(11,16,25,0.03);
+        }
+
+        .workflow-card:hover,
+        .workflow-card:focus {
+            transform: translateY(-2px);
+            border-color: var(--cyber-gold);
+            outline: none;
+        }
+
+        .workflow-card h3 {
+            margin: 0;
+            text-transform: none;
+        }
+
+        .workflow-card p {
+            margin: 0;
+            color: var(--text-muted);
+        }
+
         .hidden {
             display: none !important;
         }
@@ -517,6 +580,42 @@
         </header>
 
         <main>
+            <section class="component-card page" id="landingPage">
+                <h2 data-i18n="landing.heading">Critical Offline Warning</h2>
+                <p data-i18n="landing.body1">
+                    This tool manipulates live BIP39 mnemonics. Run it only on an air-gapped computer you control.
+                    No part of GRIFORTIS assumes custody or responsibility for your operational practices.
+                </p>
+                <p data-i18n="landing.body2">
+                    By continuing you accept that mistakes, misconfigurations, or compromised devices can cause irreversible
+                    loss of funds. Review the whitepaper and practice with low-value wallets before relying on this workflow.
+                </p>
+                <label class="consent-checkbox">
+                    <input type="checkbox" id="riskCheckbox">
+                    <span data-i18n="landing.checkbox">I fully understand what I'm doing and accept the risk.</span>
+                </label>
+                <button class="btn btn-primary" id="enterHomeButton" disabled data-i18n="landing.button">Enter Tool</button>
+            </section>
+
+            <section class="component-card page hidden" id="homePage">
+                <h2 data-i18n="home.heading">Choose a Workflow</h2>
+                <div class="home-grid">
+                    <button class="workflow-card" data-target="recoveryCard">
+                        <h3 data-i18n="home.recovery.title">Recovery</h3>
+                        <p data-i18n="home.recovery.desc">
+                            Combine at least k worksheets, validate every checksum, and reconstruct the mnemonic offline.
+                        </p>
+                    </button>
+                    <button class="workflow-card" data-target="shardingCard">
+                        <h3 data-i18n="home.sharding.title">Sharding</h3>
+                        <p data-i18n="home.sharding.desc">
+                            Split an existing BIP39 mnemonic into printable worksheets with row and master verifications.
+                        </p>
+                    </button>
+                </div>
+            </section>
+
+            <div id="appContent" class="hidden">
             <section class="component-card" id="safetyCard">
                 <h2 data-i18n="safety.heading">Operational Safety &amp; Warnings</h2>
                 <p data-i18n="safety.intro">
@@ -653,6 +752,7 @@
                 </p>
                 <div id="debugCoefficients"></div>
             </section>
+            </div>
         </main>
 
         <footer class="disclaimer">
@@ -708,7 +808,17 @@
                     "diagnostics.toggleDebugBtn": "Toggle Debug Coefficients",
                     "debug.heading": "TEMPORARY – DEBUG ONLY",
                     "debug.description": "The following table lists every random polynomial used for the most recent sharding run. Do not share or print this data in production.",
-                    "footer.disclaimer": "GRIFORTIS provides software only. You remain responsible for operational security, legal compliance, and custody outcomes. Keep your shares offline and rehearse recovery procedures frequently."
+                    "footer.disclaimer": "GRIFORTIS provides software only. You remain responsible for operational security, legal compliance, and custody outcomes. Keep your shares offline and rehearse recovery procedures frequently.",
+                    "landing.heading": "Critical Offline Warning",
+                    "landing.body1": "This tool manipulates live BIP39 mnemonics. Run it only on an air-gapped computer you control. No part of GRIFORTIS assumes custody or responsibility for your operational practices.",
+                    "landing.body2": "By continuing you accept that mistakes, misconfigurations, or compromised devices can cause irreversible loss of funds. Review the whitepaper and practice with low-value wallets before relying on this workflow.",
+                    "landing.checkbox": "I fully understand what I'm doing and accept the risk.",
+                    "landing.button": "Enter Tool",
+                    "home.heading": "Choose a Workflow",
+                    "home.recovery.title": "Recovery",
+                    "home.recovery.desc": "Combine at least k worksheets, validate every checksum, and reconstruct the mnemonic offline.",
+                    "home.sharding.title": "Sharding",
+                    "home.sharding.desc": "Split an existing BIP39 mnemonic into printable worksheets with row and master verifications."
                 }
             };
 
@@ -2786,7 +2896,8 @@
                 fallbackWordMap: new Map(),
                 fallbackCounter: 0,
                 wordlistLoaded: BIP39_WORDLIST.length === 2048,
-                recoveryShareCount: 3
+                recoveryShareCount: 3,
+                landingAcknowledged: false
             };
 
             const dom = {};
@@ -2805,6 +2916,11 @@
                 dom.toggleIcon = document.getElementById("toggle-icon");
                 dom.toggleText = document.getElementById("toggle-text");
                 dom.languageSelect = document.getElementById("languageSelect");
+                dom.landingPage = document.getElementById("landingPage");
+                dom.homePage = document.getElementById("homePage");
+                dom.appContent = document.getElementById("appContent");
+                dom.riskCheckbox = document.getElementById("riskCheckbox");
+                dom.enterHomeButton = document.getElementById("enterHomeButton");
                 dom.shardingForm = document.getElementById("shardingForm");
                 dom.mnemonicInput = document.getElementById("mnemonicInput");
                 dom.mnemonicLength = document.getElementById("mnemonicLength");
@@ -2827,12 +2943,16 @@
                 dom.runSelfTestBtn = document.getElementById("runSelfTestBtn");
                 dom.selfTestOutput = document.getElementById("selfTestOutput");
                 dom.toggleDebugBtn = document.getElementById("toggleDebugBtn");
+                dom.workflowCards = document.querySelectorAll(".workflow-card");
             }
 
             // Wire every interaction for the sharding, recovery, and diagnostics workflows.
             function attachEventListeners() {
                 dom.themeToggle.addEventListener("click", toggleTheme);
                 dom.languageSelect.addEventListener("change", handleLanguageChange);
+                dom.riskCheckbox.addEventListener("change", handleRiskCheckboxToggle);
+                dom.enterHomeButton.addEventListener("click", handleEnterHome);
+                dom.workflowCards.forEach((card) => card.addEventListener("click", handleWorkflowSelection));
                 dom.shardingForm.addEventListener("submit", handleGenerateShares);
                 dom.printButton.addEventListener("click", () => window.print());
                 dom.recoveryForm.addEventListener("submit", handleRecoverySubmission);
@@ -2876,6 +2996,33 @@
                     applyTranslations();
                     document.documentElement.lang = newLocale;
                     updateWordlistStatusMessage();
+                }
+            }
+
+            // Enable the entry button only when the risk acknowledgment is checked.
+            function handleRiskCheckboxToggle() {
+                dom.enterHomeButton.disabled = !dom.riskCheckbox.checked;
+            }
+
+            // Transition from the landing warning to the home menu.
+            function handleEnterHome() {
+                if (!dom.riskCheckbox.checked) return;
+                state.landingAcknowledged = true;
+                dom.landingPage.classList.add("hidden");
+                dom.homePage.classList.remove("hidden");
+                dom.homePage.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+
+            // Show the requested workflow and focus its card.
+            function handleWorkflowSelection(event) {
+                const targetId = event.currentTarget.getAttribute("data-target");
+                if (!targetId) return;
+                dom.appContent.classList.remove("hidden");
+                const targetNode = document.getElementById(targetId);
+                if (targetNode) {
+                    targetNode.classList.add("page-focus");
+                    targetNode.scrollIntoView({ behavior: "smooth", block: "start" });
+                    setTimeout(() => targetNode.classList.remove("page-focus"), 1600);
                 }
             }
 
