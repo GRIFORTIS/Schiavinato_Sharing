@@ -6,7 +6,7 @@ This repository hosts the whitepaper:
 
 - **[`GRIFORTIS/Schiavinato_Sharing/WHITEPAPER.md`](https://github.com/GRIFORTIS/Schiavinato_Sharing/blob/main/WHITEPAPER.md)**
 
-The goal of this project is to document and eventually provide reference material for a secret-sharing scheme tailored to BIP39 mnemonics. The primary artifact at the moment is the whitepaper itself.
+The goal of this project is to document and provide reference material for a secret-sharing scheme tailored to BIP39 mnemonics. The primary artifacts at the moment are the whitepaper and test vectors; reference implementations will be developed under the `tools/` subdirectories.
 
 ---
 
@@ -17,8 +17,10 @@ The goal of this project is to document and eventually provide reference materia
 - `CONTRIBUTING.md` – guidelines for suggesting changes, reference implementations, and reviews.
 - `SECURITY.md` – how to report vulnerabilities or subtle failure modes responsibly.
 - `LICENSE` and `LICENSE-WHITEPAPER.md` – licensing terms for code and the whitepaper, respectively.
+- `tools/html/` – planned self-contained HTML/JavaScript reference tool for sharding and recovery.
+- `tools/python/` – planned Python reference library implementing the Schiavinato Sharing scheme.
 
-Additional resources (reference implementations, examples, or tooling) may be added to this repository in the future.
+Additional resources (including the HTML tool, Python library, and further examples) will be added to this repository over time.
 
 ---
 
