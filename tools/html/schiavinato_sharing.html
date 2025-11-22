@@ -1270,6 +1270,47 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             }
         }
 
+        /**
+         * Initializes per-input tracking so we know when a user changes a field between attempts.
+         */
+        function initializeRecoveryInputTracking(input) {
+            if (!input) return;
+            input.dataset.lastAttemptValue = String(input.value ?? '');
+        }
+
+        /**
+         * Persists the current values as the baseline for the next attempt.
+         */
+        function snapshotShareInputs() {
+            const inputs = recoverSharesContainer.querySelectorAll('.share-input-container input');
+            inputs.forEach(input => {
+                input.dataset.lastAttemptValue = String(input.value ?? '');
+            });
+        }
+
+        /**
+         * Returns a set of share numbers whose inputs changed since the last attempt.
+         */
+        function collectDirtyShareNumbers() {
+            const dirtyShares = new Set();
+            const containers = recoverSharesContainer.querySelectorAll('.share-input-container');
+            containers.forEach(container => {
+                const shareNumberInput = container.querySelector('[id^="recover-x-"]');
+                if (!shareNumberInput) return;
+                const shareNumber = parseInt(shareNumberInput.value, 10);
+                const shareId = Number.isInteger(shareNumber) ? shareNumber : parseInt(container.dataset.shareIndex ?? '0', 10);
+                const relevantInputs = container.querySelectorAll('input');
+                for (const input of relevantInputs) {
+                    const lastAttemptValue = input.dataset.lastAttemptValue ?? '';
+                    if (String(input.value ?? '') !== lastAttemptValue) {
+                        dirtyShares.add(shareId);
+                        break;
+                    }
+                }
+            });
+            return dirtyShares;
+        }
+
         // ==========================================================================
         // SECTION 2: UI - DOM ELEMENT REFERENCES
         // ==========================================================================
@@ -1395,138 +1436,143 @@ TERMS OF USE & LIABILITY DISCLAIMER:
              * 3. Reject duplicate share numbers before attempting any cryptographic work.
              * 4. Keep field-level highlights in place until the user fixes the corresponding input.
              */
-            const k = parseInt(document.querySelector('input[name="recover-k"]:checked').value, 10);
-            const shares = [];
-            const shareContainers = document.querySelectorAll('#recover-shares-container .share-input-container');
-
-            if (shareContainers.length !== k) {
-                await showErrorModal('Input Error', "The number of input forms does not match the selected threshold (K).");
-                return;
-            }
-            
-            const uiErrors = new Set();
-            const seenShareNumbers = new Map(); // shareNumber -> shareIndex
-            let parsingError = false;
-
-            for (let i = 0; i < k; i++) {
-                const container = shareContainers[i];
-                const shareIndex = i + 1;
-                container.dataset.shareIndex = String(shareIndex);
-
-                const shareNumberInput = container.querySelector(`#recover-x-${shareIndex}`);
-                const masterShareInput = container.querySelector(`#recover-master-${shareIndex}`);
-
-                if (!shareNumberInput || !masterShareInput) {
-                    uiErrors.add('A share input block is missing required fields.');
-                    parsingError = true;
-                    continue;
-                }
-
-                shareNumberInput.dataset.fieldLabel = `Share ${shareIndex} number`;
-                shareNumberInput.dataset.allowNumeric = 'true';
-                masterShareInput.dataset.fieldLabel = `Share ${shareIndex} master verification`;
-                masterShareInput.dataset.allowNumeric = 'true';
-
-                const shareNumberRaw = shareNumberInput.value.trim();
-                const shareNumber = Number(shareNumberRaw);
-                if (!Number.isInteger(shareNumber) || shareNumber <= 0 || shareNumber >= FIELD_PRIME) {
-                    const message = `Share numbers must be integers between 1 and ${FIELD_PRIME - 1}.`;
-                    markInputInvalid(shareNumberInput, message);
-                    uiErrors.add(message);
-                    parsingError = true;
-                    continue;
-                }
-                if (seenShareNumbers.has(shareNumber)) {
-                    const existingIndex = seenShareNumbers.get(shareNumber);
-                    const existingInput = document.querySelector(`#recover-x-${existingIndex}`);
-                    const duplicateMessage = `Share number ${shareNumber} is duplicated. Each share must have a unique X value.`;
-                    markInputInvalid(shareNumberInput, duplicateMessage);
-                    if (existingInput) {
-                        markInputInvalid(existingInput, duplicateMessage);
-                    }
-                    uiErrors.add('Duplicate share numbers detected. Resolve before continuing.');
-                    parsingError = true;
-                    continue;
-                }
-                seenShareNumbers.set(shareNumber, shareIndex);
-
-                const masterParse = parseShareValue(masterShareInput.value, { allowNumeric: true });
-                if (!masterParse.ok) {
-                    markInputInvalid(masterShareInput, formatParseError(masterShareInput.dataset.fieldLabel, masterParse));
-                    uiErrors.add('Fix the highlighted master verification fields.');
-                    parsingError = true;
-                    continue;
-                }
-
-                const wordsPerChecksum = WORDS_PER_ROW;
-                const numRows = recoverWordCount / wordsPerChecksum;
-                const share = {
-                    shareNumber,
-                    shareIndex,
-                    wordShares: [],
-                    checksumShares: [],
-                    masterVerificationShare: masterParse.value
-                };
-
-                let rowHadError = false;
-                for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
-                    for (let wordSlot = 0; wordSlot < wordsPerChecksum; wordSlot++) {
-                        const input = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="word-${wordSlot}"]`);
-                        if (!input) continue;
-                        const parseResult = parseShareValue(input.value, { allowNumeric: true });
-                        if (!parseResult.ok) {
-                            const message = formatParseError(input.dataset.fieldLabel, parseResult);
-                            markInputInvalid(input, message, { rowHighlight: true });
-                            uiErrors.add('Fix the highlighted share rows before continuing.');
-                            rowHadError = true;
-                        } else {
-                            clearInputErrorState(input);
-                            share.wordShares.push(parseResult.value);
-                        }
-                    }
-                    const checksumInput = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="checksum"]`);
-                    if (checksumInput) {
-                        const checksumParse = parseShareValue(checksumInput.value, { allowNumeric: true });
-                        if (!checksumParse.ok) {
-                            const message = formatParseError(checksumInput.dataset.fieldLabel, checksumParse);
-                            markInputInvalid(checksumInput, message, { rowHighlight: true });
-                            uiErrors.add('Fix the highlighted share rows before continuing.');
-                            rowHadError = true;
-                        } else {
-                            clearInputErrorState(checksumInput);
-                            share.checksumShares.push(checksumParse.value);
-                        }
-                    }
-                }
-
-                if (rowHadError) {
-                    parsingError = true;
-                    continue;
-                }
-
-                shares.push(share);
-            }
-
-            if (uiErrors.size > 0) {
-                await showErrorModal('Input Error', Array.from(uiErrors).join('\n'));
-                return;
-            }
-
-            if (parsingError || shares.length !== k) {
-                await showErrorModal('Input Error', 'Please fix the highlighted fields before attempting recovery again.');
-                return;
-            }
-
-            // 2. CALL UNIFIED RECOVERY & VALIDATION
+            const dirtyShareNumbers = collectDirtyShareNumbers();
             try {
-                const report = await SchiavinatoSharing.recoverAndValidate(shares, recoverWordCount, BIP39_WORDLIST);
-                
-                // 3. DISPLAY RESULTS
-                await displayValidationResults(report, shares);
+                const k = parseInt(document.querySelector('input[name="recover-k"]:checked').value, 10);
+                const shares = [];
+                const shareContainers = document.querySelectorAll('#recover-shares-container .share-input-container');
 
-            } catch (error) {
-                // Catches errors from the UI gathering phase (e.g., parsing)
-                await showErrorModal('Input Error', error.message);
+                if (shareContainers.length !== k) {
+                    await showErrorModal('Input Error', "The number of input forms does not match the selected threshold (K).");
+                    return;
+                }
+                
+                const uiErrors = new Set();
+                const seenShareNumbers = new Map(); // shareNumber -> shareIndex
+                let parsingError = false;
+
+                for (let i = 0; i < k; i++) {
+                    const container = shareContainers[i];
+                    const shareIndex = i + 1;
+                    container.dataset.shareIndex = String(shareIndex);
+
+                    const shareNumberInput = container.querySelector(`#recover-x-${shareIndex}`);
+                    const masterShareInput = container.querySelector(`#recover-master-${shareIndex}`);
+
+                    if (!shareNumberInput || !masterShareInput) {
+                        uiErrors.add('A share input block is missing required fields.');
+                        parsingError = true;
+                        continue;
+                    }
+
+                    shareNumberInput.dataset.fieldLabel = `Share ${shareIndex} number`;
+                    shareNumberInput.dataset.allowNumeric = 'true';
+                    masterShareInput.dataset.fieldLabel = `Share ${shareIndex} master verification`;
+                    masterShareInput.dataset.allowNumeric = 'true';
+
+                    const shareNumberRaw = shareNumberInput.value.trim();
+                    const shareNumber = Number(shareNumberRaw);
+                    if (!Number.isInteger(shareNumber) || shareNumber <= 0 || shareNumber >= FIELD_PRIME) {
+                        const message = `Share numbers must be integers between 1 and ${FIELD_PRIME - 1}.`;
+                        markInputInvalid(shareNumberInput, message);
+                        uiErrors.add(message);
+                        parsingError = true;
+                        continue;
+                    }
+                    if (seenShareNumbers.has(shareNumber)) {
+                        const existingIndex = seenShareNumbers.get(shareNumber);
+                        const existingInput = document.querySelector(`#recover-x-${existingIndex}`);
+                        const duplicateMessage = `Share number ${shareNumber} is duplicated. Each share must have a unique X value.`;
+                        markInputInvalid(shareNumberInput, duplicateMessage);
+                        if (existingInput) {
+                            markInputInvalid(existingInput, duplicateMessage);
+                        }
+                        uiErrors.add('Duplicate share numbers detected. Resolve before continuing.');
+                        parsingError = true;
+                        continue;
+                    }
+                    seenShareNumbers.set(shareNumber, shareIndex);
+
+                    const masterParse = parseShareValue(masterShareInput.value, { allowNumeric: true });
+                    if (!masterParse.ok) {
+                        markInputInvalid(masterShareInput, formatParseError(masterShareInput.dataset.fieldLabel, masterParse));
+                        uiErrors.add('Fix the highlighted master verification fields.');
+                        parsingError = true;
+                        continue;
+                    }
+
+                    const wordsPerChecksum = WORDS_PER_ROW;
+                    const numRows = recoverWordCount / wordsPerChecksum;
+                    const share = {
+                        shareNumber,
+                        shareIndex,
+                        wordShares: [],
+                        checksumShares: [],
+                        masterVerificationShare: masterParse.value
+                    };
+
+                    let rowHadError = false;
+                    for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
+                        for (let wordSlot = 0; wordSlot < wordsPerChecksum; wordSlot++) {
+                            const input = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="word-${wordSlot}"]`);
+                            if (!input) continue;
+                            const parseResult = parseShareValue(input.value, { allowNumeric: true });
+                            if (!parseResult.ok) {
+                                const message = formatParseError(input.dataset.fieldLabel, parseResult);
+                                markInputInvalid(input, message, { rowHighlight: true });
+                                uiErrors.add('Fix the highlighted share rows before continuing.');
+                                rowHadError = true;
+                            } else {
+                                clearInputErrorState(input);
+                                share.wordShares.push(parseResult.value);
+                            }
+                        }
+                        const checksumInput = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="checksum"]`);
+                        if (checksumInput) {
+                            const checksumParse = parseShareValue(checksumInput.value, { allowNumeric: true });
+                            if (!checksumParse.ok) {
+                                const message = formatParseError(checksumInput.dataset.fieldLabel, checksumParse);
+                                markInputInvalid(checksumInput, message, { rowHighlight: true });
+                                uiErrors.add('Fix the highlighted share rows before continuing.');
+                                rowHadError = true;
+                            } else {
+                                clearInputErrorState(checksumInput);
+                                share.checksumShares.push(checksumParse.value);
+                            }
+                        }
+                    }
+
+                    if (rowHadError) {
+                        parsingError = true;
+                        continue;
+                    }
+
+                    shares.push(share);
+                }
+
+                if (uiErrors.size > 0) {
+                    await showErrorModal('Input Error', Array.from(uiErrors).join('\n'));
+                    return;
+                }
+
+                if (parsingError || shares.length !== k) {
+                    await showErrorModal('Input Error', 'Please fix the highlighted fields before attempting recovery again.');
+                    return;
+                }
+
+                // 2. CALL UNIFIED RECOVERY & VALIDATION
+                try {
+                    const report = await SchiavinatoSharing.recoverAndValidate(shares, recoverWordCount, BIP39_WORDLIST);
+                    
+                    // 3. DISPLAY RESULTS
+                    await displayValidationResults(report, shares, dirtyShareNumbers);
+
+                } catch (error) {
+                    // Catches errors from the UI gathering phase (e.g., parsing)
+                    await showErrorModal('Input Error', error.message);
+                }
+            } finally {
+                snapshotShareInputs();
             }
         });
 
@@ -1536,7 +1582,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
          * @param {Object} report - The report object from `recoverAndValidate`.
          * @param {Array<Object>} shares - The array of share objects from the UI, needed for context.
          */
-        async function displayValidationResults(report, shares) {
+        async function displayValidationResults(report, shares, dirtyShareNumbers = new Set()) {
             const { recoveredMnemonic, errors, sharesWithInvalidChecksums } = report;
             const hasSchiavinatoErrors = errors.row.length > 0 || errors.master;
             const hasOnlyBip39Error = !hasSchiavinatoErrors && !errors.generic && errors.bip39;
@@ -1550,11 +1596,11 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     errorMessage += ` Mismatch found in: ${failingRows}.`;
                     // This highlights the row across ALL shares, which is the correct behavior
                     // for post-recovery errors where the faulty share is unknown.
-                    errors.row.forEach(rowIndex => highlightErrorRow(rowIndex));
+                    errors.row.forEach(rowIndex => highlightErrorRow(rowIndex, null, dirtyShareNumbers));
                 }
                 if (errors.master) {
                     errorMessage += ' Master verification failed.';
-                    highlightMasterError(sharesWithInvalidChecksums, shares);
+                    highlightMasterError(sharesWithInvalidChecksums, shares, dirtyShareNumbers);
                 }
                 
                 await showErrorModal('Recovery Failed', errorMessage);
@@ -1710,6 +1756,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             inputX.value = shareCache.shareNumber;
             inputX.dataset.allowNumeric = 'true';
             inputX.dataset.fieldLabel = `Share ${shareIndex} number`;
+            initializeRecoveryInputTracking(inputX);
             inputX.addEventListener('blur', () => validateInputOnBlur(inputX));
             inputX.addEventListener('input', () => clearInputErrorState(inputX));
             shareNumberGroup.appendChild(labelX);
@@ -1729,6 +1776,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             inputMaster.value = shareCache.masterVerificationShare || '';
             inputMaster.dataset.allowNumeric = 'true';
             inputMaster.dataset.fieldLabel = `Share ${shareIndex} master verification`;
+            initializeRecoveryInputTracking(inputMaster);
             attachAutocompleteListeners(inputMaster);
             masterShareGroup.appendChild(labelMaster);
             masterShareGroup.appendChild(inputMaster);
@@ -1764,6 +1812,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     input.dataset.allowNumeric = 'true';
                     input.dataset.fieldLabel = buildRecoveryFieldLabel(shareIndex, i - 1, `word-${j}`);
                     input.value = shareCache.words[wordCounter] || '';
+                    initializeRecoveryInputTracking(input);
                     attachAutocompleteListeners(input);
                     row.appendChild(label);
                     row.appendChild(input);
@@ -1785,6 +1834,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 input.dataset.allowNumeric = 'true';
                 input.dataset.fieldLabel = buildRecoveryFieldLabel(shareIndex, i - 1, 'checksum');
                 input.value = shareCache.words[wordCounter] || '';
+                initializeRecoveryInputTracking(input);
                 attachAutocompleteListeners(input);
                 row.appendChild(label);
                 row.appendChild(input);
@@ -2097,16 +2147,18 @@ TERMS OF USE & LIABILITY DISCLAIMER:
          * Marks every input involved in the specified checksum row across all share forms as invalid.
          * @param {number} rowIndex - Zero-based index of the row reported by the checksum error.
          */
-        function highlightErrorRow(rowIndex, targetShareNumber = null) {
+        function highlightErrorRow(rowIndex, targetShareNumber = null, dirtyShareNumbers = new Set()) {
             if (typeof rowIndex !== 'number' || rowIndex < 0) return;
             const shareContainers = recoverSharesContainer.querySelectorAll('.share-input-container');
+            const shouldFilterByDirty = !targetShareNumber && dirtyShareNumbers && dirtyShareNumbers.size > 0;
             shareContainers.forEach(container => {
-                if (targetShareNumber) {
-                    const shareNumberInput = container.querySelector('[id^="recover-x-"]');
-                    const containerShareNumber = parseInt(shareNumberInput?.value, 10);
-                    if (containerShareNumber !== targetShareNumber) {
-                        return;
-                    }
+                const shareNumberInput = container.querySelector('[id^="recover-x-"]');
+                const containerShareNumber = parseInt(shareNumberInput?.value, 10);
+                if (targetShareNumber && containerShareNumber !== targetShareNumber) {
+                    return;
+                }
+                if (shouldFilterByDirty && !dirtyShareNumbers.has(containerShareNumber)) {
+                    return;
                 }
                 const inputs = container.querySelectorAll(`input[data-row-index="${rowIndex}"]`);
                 inputs.forEach(input => markInputInvalid(input, input.dataset.fieldLabel || 'Row value mismatch', { rowHighlight: true }));
@@ -2121,14 +2173,17 @@ TERMS OF USE & LIABILITY DISCLAIMER:
          * @param {Set<number>} sharesWithInvalidChecksums - A set of share numbers with internal errors.
          * @param {Array<Object>} shares - The array of share objects from the UI, needed for context.
          */
-        function highlightMasterError(sharesWithInvalidChecksums, shares) {
+        function highlightMasterError(sharesWithInvalidChecksums, shares, dirtyShareNumbers = new Set()) {
             const masterInputs = document.querySelectorAll('[id^="recover-master-"]');
-            const suspectsExist = sharesWithInvalidChecksums && sharesWithInvalidChecksums.size > 0;
+            const suspects = new Set(sharesWithInvalidChecksums || []);
+            if (!suspects.size && dirtyShareNumbers && dirtyShareNumbers.size) {
+                dirtyShareNumbers.forEach(num => suspects.add(num));
+            }
             masterInputs.forEach(input => {
                 const shareIndex = parseInt(input.id.split('-').pop(), 10);
                 const share = shares.find(s => s.shareIndex === shareIndex);
                 if (!share) return;
-                const shouldHighlight = suspectsExist ? sharesWithInvalidChecksums.has(share.shareNumber) : true;
+                const shouldHighlight = suspects.size ? suspects.has(share.shareNumber) : true;
                 if (shouldHighlight) {
                     const label = input.dataset.fieldLabel || `Share ${shareIndex} master verification`;
                     markInputInvalid(input, `${label} failed master verification.`, { rowHighlight: true });
@@ -2835,18 +2890,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 };
 
                 try {
-                    // Pre-computation: Check internal consistency of each provided share's checksums
-                    shares.forEach(share => {
-                        const wordIndices = share.wordShares;
-                        const recomputedChecks = computeRowChecks(wordIndices);
-                        for (let i = 0; i < recomputedChecks.length; i++) {
-                            if (recomputedChecks[i] !== share.checksumShares[i]) {
-                                report.sharesWithInvalidChecksums.add(share.shareNumber);
-                                break; // No need to check other rows for this share
-                            }
-                        }
-                    });
-
                     // 1. Pre-flight checks for input validity
                     if (!Array.isArray(shares) || shares.length < 2) {
                         report.errors.generic = 'At least two shares are required for recovery.';
