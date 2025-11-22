@@ -536,9 +536,12 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
         /* --- 11. PRINT STYLES --- */
         @media print {
-            /* Hide elements not meant for printing */
-            .header, #page1, .disclaimer, #page2 .btn, #btn-back-to-page1, #btn-start-over, .theme-toggle {
+            /* Hide all screen elements and show only the dedicated print container */
+            body > .container, .header, .disclaimer, .modal-overlay, .theme-toggle {
                 display: none;
+            }
+            #print-output {
+                display: block;
             }
             
             /* Force light theme colors for better readability and ink saving */
@@ -552,7 +555,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 --input-text: var(--brand-navy);
                 --shadow-color: transparent;
             }
-
+            
             /* General print setup */
             body, .container {
                 width: 100%;
@@ -567,21 +570,21 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 margin-bottom: 20px;
             }
             
-            /* Page break logic for shares */
-            .share-card {
+            /* Page break logic for each share inside the print container */
+            #print-output .share-card {
                 break-before: page; /* Modern property */
                 page-break-before: always; /* Older property */
             }
 
             /* Prevent page break on the first share card */
-            #shares-output > .share-card:first-child {
+            #print-output .share-card:first-child {
                 break-before: auto;
                 page-break-before: auto;
             }
-            
-            /* Make sure the main content of page 2 is visible */
-            #page2 {
-                display: block !important;
+
+            /* Hide on-screen buttons inside the share display area if any exist */
+            #shares-output .btn, #btn-back-to-create1, #btn-start-over-create {
+                 display: none;
             }
         }
 
@@ -813,18 +816,13 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                                 </div>
                             </div>
                         </div>
-                        <!-- Master Verification Input -->
+                        <!-- Word Count Toggle -->
                         <div class="form-group" style="flex: 2;">
-                            <label for="recover-master">Master Verification</label>
-                            <input type="text" id="recover-master" class="mono" placeholder="e.g., abandon - 0001">
-                        </div>
-                    </div>
-                     <!-- Word Count Toggle -->
-                    <div class="form-group" style="margin-top: 20px;">
-                         <label>Original Seed Phrase Length</label>
-                        <div>
-                            <button id="recover-btn-12-words" class="btn btn-secondary">12 Words</button>
-                            <button id="recover-btn-24-words" class="btn btn-primary">24 Words</button>
+                            <label>Original Seed Phrase Length</label>
+                            <div>
+                                <button id="recover-btn-12-words" class="btn btn-secondary">12 Words</button>
+                                <button id="recover-btn-24-words" class="btn btn-primary">24 Words</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -892,7 +890,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
                  <!-- Page 4 Footer Buttons -->
                  <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                    <button class="btn btn-secondary btn-back-home">Back to Home</button>
+                    <button id="btn-back-to-recover1" class="btn btn-secondary">← Go Back and Edit</button>
                     <button id="btn-start-over-recover" class="btn btn-primary">Clear All & Start Over</button>
                 </div>
             </section>
@@ -908,6 +906,13 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             </footer>
         </main>
     </div>
+
+    <!-- ==========================================================================
+    PRINT-ONLY OUTPUT
+    - A dedicated container for generating a clean, printable version of shares.
+    - Populated by JavaScript and only made visible via print media queries.
+    ========================================================================== -->
+    <div id="print-output" style="display: none;"></div>
 
     <!-- ==========================================================================
     MODAL DIALOG
@@ -933,16 +938,218 @@ TERMS OF USE & LIABILITY DISCLAIMER:
     <div id="autocomplete-suggestions" style="display: none;"></div>
 
     <!-- ==========================================================================
+    SHA-256 LIBRARY (Embedded for offline use)
+    - Adapted from js-sha256 v0.9.0 (MIT License) https://github.com/emn178/js-sha256
+    - Provides a pure-JavaScript SHA-256 implementation that works in air-gapped sessions.
+    ========================================================================== -->
+    <script>
+        (function (root) {
+            'use strict';
+
+            const K = new Uint32Array([
+                0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+                0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+                0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+                0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+                0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+                0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+                0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+                0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+            ]);
+
+            const INITIAL_HASH = new Uint32Array([
+                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+            ]);
+
+            function rightRotate(value, amount) {
+                return (value >>> amount) | (value << (32 - amount));
+            }
+
+            function utf8ToBytes(str) {
+                if (typeof TextEncoder !== 'undefined') {
+                    return new TextEncoder().encode(str);
+                }
+                const bytes = [];
+                for (let i = 0; i < str.length; i++) {
+                    let codePoint = str.charCodeAt(i);
+                    if (codePoint < 0x80) {
+                        bytes.push(codePoint);
+                    } else if (codePoint < 0x800) {
+                        bytes.push(0xc0 | (codePoint >> 6));
+                        bytes.push(0x80 | (codePoint & 0x3f));
+                    } else if (codePoint >= 0xd800 && codePoint <= 0xdbff) {
+                        i++;
+                        const next = str.charCodeAt(i);
+                        codePoint = ((codePoint - 0xd800) << 10) + (next - 0xdc00) + 0x10000;
+                        bytes.push(0xf0 | (codePoint >> 18));
+                        bytes.push(0x80 | ((codePoint >> 12) & 0x3f));
+                        bytes.push(0x80 | ((codePoint >> 6) & 0x3f));
+                        bytes.push(0x80 | (codePoint & 0x3f));
+                    } else {
+                        bytes.push(0xe0 | (codePoint >> 12));
+                        bytes.push(0x80 | ((codePoint >> 6) & 0x3f));
+                        bytes.push(0x80 | (codePoint & 0x3f));
+                    }
+                }
+                return new Uint8Array(bytes);
+            }
+
+            function normalizeInput(message) {
+                if (message instanceof Uint8Array) {
+                    return message;
+                }
+                if (typeof message === 'string') {
+                    return utf8ToBytes(message);
+                }
+                if (message instanceof ArrayBuffer) {
+                    return new Uint8Array(message);
+                }
+                if (ArrayBuffer.isView(message)) {
+                    return new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
+                }
+                throw new TypeError('sha256: unsupported message type');
+            }
+
+            function sha256DigestBytes(message) {
+                const bytes = normalizeInput(message);
+                const length = bytes.length;
+                const bitLength = length * 8;
+                const paddedLength = (length + 9 + 63) & ~63;
+                const padded = new Uint8Array(paddedLength);
+                padded.set(bytes);
+                padded[length] = 0x80;
+                const view = new DataView(padded.buffer);
+                view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000));
+                view.setUint32(paddedLength - 4, bitLength >>> 0);
+
+                const w = new Uint32Array(64);
+                let h0 = INITIAL_HASH[0];
+                let h1 = INITIAL_HASH[1];
+                let h2 = INITIAL_HASH[2];
+                let h3 = INITIAL_HASH[3];
+                let h4 = INITIAL_HASH[4];
+                let h5 = INITIAL_HASH[5];
+                let h6 = INITIAL_HASH[6];
+                let h7 = INITIAL_HASH[7];
+
+                for (let offset = 0; offset < paddedLength; offset += 64) {
+                    for (let i = 0; i < 16; i++) {
+                        w[i] = view.getUint32(offset + (i << 2));
+                    }
+                    for (let i = 16; i < 64; i++) {
+                        const s0 = (rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >>> 3)) >>> 0;
+                        const s1 = (rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >>> 10)) >>> 0;
+                        w[i] = (((((w[i - 16] + s0) >>> 0) + w[i - 7]) >>> 0) + s1) >>> 0;
+                    }
+
+                    let a = h0;
+                    let b = h1;
+                    let c = h2;
+                    let d = h3;
+                    let e = h4;
+                    let f = h5;
+                    let g = h6;
+                    let h = h7;
+
+                    for (let i = 0; i < 64; i++) {
+                        const S1 = (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) >>> 0;
+                        const ch = ((e & f) ^ (~e & g)) >>> 0;
+                        const temp1 = ((((((h + S1) >>> 0) + ch) >>> 0) + K[i]) >>> 0) + w[i];
+                        const S0 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) >>> 0;
+                        const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+                        const temp2 = (S0 + maj) >>> 0;
+
+                        h = g;
+                        g = f;
+                        f = e;
+                        e = (d + temp1) >>> 0;
+                        d = c;
+                        c = b;
+                        b = a;
+                        a = (temp1 + temp2) >>> 0;
+                    }
+
+                    h0 = (h0 + a) >>> 0;
+                    h1 = (h1 + b) >>> 0;
+                    h2 = (h2 + c) >>> 0;
+                    h3 = (h3 + d) >>> 0;
+                    h4 = (h4 + e) >>> 0;
+                    h5 = (h5 + f) >>> 0;
+                    h6 = (h6 + g) >>> 0;
+                    h7 = (h7 + h) >>> 0;
+                }
+
+                const digest = new Uint8Array(32);
+                const digestView = new DataView(digest.buffer);
+                digestView.setUint32(0, h0);
+                digestView.setUint32(4, h1);
+                digestView.setUint32(8, h2);
+                digestView.setUint32(12, h3);
+                digestView.setUint32(16, h4);
+                digestView.setUint32(20, h5);
+                digestView.setUint32(24, h6);
+                digestView.setUint32(28, h7);
+                return digest;
+            }
+
+            function toHex(bytes) {
+                const HEX = '0123456789abcdef';
+                let out = '';
+                for (let i = 0; i < bytes.length; i++) {
+                    out += HEX[bytes[i] >>> 4] + HEX[bytes[i] & 0x0f];
+                }
+                return out;
+            }
+
+            function sha256(message) {
+                return toHex(sha256DigestBytes(message));
+            }
+
+            sha256.array = function (message) {
+                return Array.from(sha256DigestBytes(message));
+            };
+
+            sha256.digest = function (message) {
+                return sha256DigestBytes(message);
+            };
+
+            sha256.arrayBuffer = function (message) {
+                return sha256DigestBytes(message).buffer;
+            };
+
+            if (typeof module !== 'undefined' && module.exports) {
+                module.exports = sha256;
+            } else {
+                root.sha256 = sha256;
+            }
+        })(typeof self !== 'undefined' ? self : globalThis);
+    </script>
+
+    <!-- ==========================================================================
     UI BEHAVIOR SCRIPT
     - This script handles all UI interactions, dynamic content, and navigation.
     - It contains NO core cryptographic logic.
     ========================================================================== -->
     <script>
         // ==========================================================================
-        // SECTION 1: APPLICATION STATE & CACHE
-        // - These variables hold the application's data, decoupled from the UI.
-        // - Using a simple cache ensures data is preserved during UI changes.
+        //
+        //                                  UI LOGIC
+        //
         // ==========================================================================
+
+        // ==========================================================================
+        // SECTION 1: UI - APPLICATION STATE & CACHE
+        // ==========================================================================
+        
+        /** Custom error for checksum failures to pass row info to UI */
+        class ChecksumError extends Error {
+            constructor(message, row) {
+                super(message);
+                this.name = 'ChecksumError';
+                this.row = row; // row is 0-indexed
+            }
+        }
         
         let createFlowWordCache = Array(24).fill('');
         let createWordCount = 24;
@@ -959,8 +1166,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         let currentAutocompleteInput = null;
 
         // ==========================================================================
-        // SECTION 2: DOM ELEMENT REFERENCES
-        // - A central place for all references to DOM elements.
+        // SECTION 2: UI - DOM ELEMENT REFERENCES
         // ==========================================================================
         
         const pages = {
@@ -984,6 +1190,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         const btnStartOverCreate = document.getElementById('btn-start-over-create');
         const btnRecoverWallet = document.getElementById('btn-recover-wallet');
         const btnStartOverRecover = document.getElementById('btn-start-over-recover');
+        const btnBackToRecover1 = document.getElementById('btn-back-to-recover1');
 
         const schemeRadios = document.querySelectorAll('input[name="scheme"]');
         const schemeExplanation = document.getElementById('scheme-explanation');
@@ -1000,13 +1207,13 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         const modalConfirmBtn = document.getElementById('modal-confirm');
         const modalCancelBtn = document.getElementById('modal-cancel');
         const modalTitle = document.getElementById('modal-title');
-        const modalText = document.getElementById('modal-text');
+            const modalText = document.getElementById('modal-text');
         
         const connectionStatusEl = document.getElementById('connection-status');
         const autocompleteContainer = document.getElementById('autocomplete-suggestions');
 
         // ==========================================================================
-        // SECTION 3: PAGE NAVIGATION
+        // SECTION 3: UI - PAGE NAVIGATION
         // ==========================================================================
         
         /**
@@ -1034,25 +1241,180 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         btnGoToRecover.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
         btnsBackHome.forEach(btn => btn.addEventListener('click', () => showPage('home')));
         
-        btnGenerateShares.addEventListener('click', () => {
-            // TODO: Add validation before switching
-            showPage('create2', 'Create Shares');
-        });
-        btnBackToCreate1.addEventListener('click', () => showPage('create1', 'Create Shares'));
+        btnGenerateShares.addEventListener('click', async () => {
+            try {
+                // 1. Gather all inputs from the form
+                const identifier = document.getElementById('wallet-identifier').value || 'Default Wallet';
+                const date = document.getElementById('creation-date').value;
+                const scheme = document.querySelector('input[name="scheme"]:checked').value;
+                const [k, n] = scheme.split('of').map(Number);
 
-        btnRecoverWallet.addEventListener('click', () => {
-             // TODO: Add validation before switching
-            showPage('recover2', 'Recover Wallet');
+                const words = [];
+                for (let i = 1; i <= createWordCount; i++) {
+                    const input = document.getElementById(`word-${i}`);
+                    if (!input || !input.value) {
+                        throw new Error(`Word #${i} is missing.`);
+                    }
+                    words.push(input.value.trim().toLowerCase());
+                }
+                const mnemonic = words.join(' ');
+
+                // 2. Call the core logic function
+                // Note: BIP39_WORDLIST must be globally available for this to work.
+                
+                // --- TEMPORARY DEBUG START ---
+                // To revert, uncomment the ORIGINAL lines and remove the TEMPORARY DEBUG lines.
+                // const { shares } = await splitBip39(mnemonic, k, n, BIP39_WORDLIST); // ORIGINAL
+                const { shares, debugCoefficients } = await splitBip39(mnemonic, k, n, BIP39_WORDLIST); // TEMPORARY DEBUG
+                
+                // 3. Populate the next page and display it
+                // displayShares(shares, { identifier, date, scheme, wordCount: createWordCount }, debugCoefficients); // ORIGINAL
+                displayShares(shares, { identifier, date, scheme, wordCount: createWordCount }, debugCoefficients); // TEMPORARY DEBUG
+                // --- TEMPORARY DEBUG END ---
+
+                showPage('create2', 'Create Shares');
+
+            } catch (error) {
+                await showErrorModal('Generation Failed', error.message);
+            }
         });
+        
+        btnBackToCreate1.addEventListener('click', () => showPage('create1', 'Create Shares'));
+        btnBackToRecover1.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
+
+        btnRecoverWallet.addEventListener('click', async () => {
+            clearAllRecoveryHighlights(); // Clear previous errors first
+            try {
+                // 1. Gather all inputs from the recovery form
+                const k = parseInt(document.querySelector('input[name="recover-k"]:checked').value, 10);
+                
+                const shares = [];
+                const shareContainers = document.querySelectorAll('#recover-shares-container .share-input-container');
+
+                if (shareContainers.length !== k) {
+                    throw new Error("The number of input forms does not match the selected threshold (K).");
+                }
+
+                for (let i = 0; i < k; i++) {
+                    const container = shareContainers[i];
+                    const shareNumberInput = container.querySelector(`[id^="recover-x-"]`);
+                    const masterShareInput = container.querySelector(`[id^="recover-master-"]`);
+                    const shareNumber = parseInt(shareNumberInput.value.trim(), 10);
+                    
+                    // Parse "word - number" format for master share
+                    const masterShare = resolveShareValue(masterShareInput.value);
+
+                    if (isNaN(shareNumber)) {
+                        throw new Error(`Share #${i + 1} is missing a share number (X).`);
+                    }
+                    if (isNaN(masterShare)) {
+                        throw new Error(`Share #${i + 1} is missing a master verification share value.`);
+                    }
+
+                    const wordInputs = container.querySelectorAll('.seed-word-row input');
+                    const values = Array.from(wordInputs).map(input => {
+                        // The input can be a word "abandon" or a word-number pair "abandon - 0000" or just a number "0"
+                        const val = resolveShareValue(input.value);
+                        if (isNaN(val)) throw new Error(`Invalid or missing numeric value in Share #${shareNumber}. All share values (Y) must be numbers, or word-number pairs.`);
+                        return val;
+                    });
+                    
+                    const wordsPerChecksum = 3;
+                    const numRows = recoverWordCount / wordsPerChecksum;
+                    const share = {
+                        shareNumber: shareNumber,
+                        wordShares: [],
+                        checksumShares: [],
+                        masterVerificationShare: masterShare
+                    };
+
+                    let valueIndex = 0;
+                    for(let r = 0; r < numRows; r++) {
+                        for(let w = 0; w < wordsPerChecksum; w++) {
+                            share.wordShares.push(values[valueIndex++]);
+                        }
+                        share.checksumShares.push(values[valueIndex++]);
+                    }
+
+                    shares.push(share);
+                }
+
+                // 2. Call the core recovery function
+                const recoveredMnemonic = await recoverBip39(shares, recoverWordCount, BIP39_WORDLIST);
+
+                // 3. Display the result on the next page
+                displayRecoveredMnemonic(recoveredMnemonic);
+                showPage('recover2', 'Recover Wallet');
+
+            } catch (error) {
+                if (error instanceof ChecksumError) {
+                    const invalidRows = findInvalidShareRows(shares, error.row);
+                    const messageDetails = invalidRows.length
+                        ? `Share #${invalidRows[0].shareNumber}, row #${invalidRows[0].rowIndex + 1}`
+                        : `Row #${(error.row ?? 0) + 1}`;
+                    await showErrorModal('Checksum Error', `Validate the entry. ${messageDetails} has a calculation error.`);
+                    if (invalidRows.length) {
+                        invalidRows.forEach(({ shareNumber, rowIndex }) => highlightErrorRow(rowIndex, shareNumber));
+                    } else {
+                        highlightErrorRow(error.row);
+                    }
+                } else {
+                    await showErrorModal('Recovery Failed', error.message);
+                }
+            }
+        });
+        /**
+         * Returns any share rows whose Y values do not match their checksum entry.
+         * Optionally restricts the inspection to a specific row index.
+         * @param {Array<Object>} shares
+         * @param {number|null} targetRowIndex
+         * @returns {Array<{shareNumber: number, rowIndex: number}>}
+         */
+        function findInvalidShareRows(shares, targetRowIndex = null) {
+            if (!Array.isArray(shares)) return [];
+            const invalid = [];
+            shares.forEach(share => {
+                if (!share || !Array.isArray(share.wordShares) || !Array.isArray(share.checksumShares)) return;
+                const rowCount = share.checksumShares.length;
+                for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+                    if (targetRowIndex !== null && rowIndex !== targetRowIndex) continue;
+                    const base = rowIndex * WORDS_PER_ROW;
+                    const computedChecksum = modAdd(
+                        modAdd(share.wordShares[base], share.wordShares[base + 1]),
+                        share.wordShares[base + 2]
+                    );
+                    if (computedChecksum !== share.checksumShares[rowIndex]) {
+                        invalid.push({ shareNumber: share.shareNumber, rowIndex });
+                    }
+                }
+            });
+            return invalid;
+        }
+
 
         disclaimerCheckbox.addEventListener('change', () => {
             btnContinueToHome.disabled = !disclaimerCheckbox.checked;
         });
         
         // ==========================================================================
-        // SECTION 4: DYNAMIC UI (CREATE FLOW)
+        // SECTION 4: UI - DYNAMIC CONTENT (CREATE & RECOVER FLOWS)
         // ==========================================================================
         
+        const explanations = {
+            '2of3': {
+                title: '2-of-3 Scheme (Default)',
+                details: '<p>You will create <strong>3 shares</strong> in total. To recover the wallet, you will need any <strong>2 of them</strong>. This is a common and balanced setup for personal backup.</p>'
+            },
+            '2of4': {
+                title: '2-of-4 Scheme',
+                details: '<p>You will create <strong>4 shares</strong> in total. To recover the wallet, you will need any <strong>2 of them</strong>. This offers more redundancy, allowing for the loss of up to two shares.</p>'
+            },
+            '3of5': {
+                title: '3-of-5 Scheme (Sovereign)',
+                details: '<p>You will create <strong>5 shares</strong> in total. To recover the wallet, you will need any <strong>3 of them</strong>. This is highly secure and resilient, ideal for group custody or high-value assets.</p>'
+            }
+        };
+
         /**
          * Updates the scheme explanation box based on the selected radio button.
          */
@@ -1096,10 +1458,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         
         schemeRadios.forEach(radio => radio.addEventListener('change', updateSchemeDescription));
         
-        // ==========================================================================
-        // SECTION 5: DYNAMIC UI (RECOVER FLOW)
-        // ==========================================================================
-
         /**
          * Generates a complete HTML block for a single share's input fields from the cache.
          * @param {number} shareIndex - The index of the share to generate (1-based).
@@ -1116,6 +1474,11 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             mainHeader.textContent = `Share Input #${shareIndex}`;
             container.appendChild(mainHeader);
 
+            const twoColGrid = document.createElement('div');
+            twoColGrid.style.display = 'grid';
+            twoColGrid.style.gridTemplateColumns = '1fr 1fr';
+            twoColGrid.style.gap = '20px';
+
             const shareNumberGroup = document.createElement('div');
             shareNumberGroup.className = 'form-group';
             const labelX = document.createElement('label');
@@ -1125,11 +1488,30 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             inputX.type = 'text';
             inputX.id = `recover-x-${shareIndex}`;
             inputX.className = 'mono';
-            inputX.placeholder = 'Enter the number of this share';
+            inputX.placeholder = 'E.g., 3';
             inputX.value = shareCache.shareNumber;
             shareNumberGroup.appendChild(labelX);
             shareNumberGroup.appendChild(inputX);
-            container.appendChild(shareNumberGroup);
+            twoColGrid.appendChild(shareNumberGroup);
+
+            const masterShareGroup = document.createElement('div');
+            masterShareGroup.className = 'form-group';
+            const labelMaster = document.createElement('label');
+            labelMaster.htmlFor = `recover-master-${shareIndex}`;
+            labelMaster.textContent = `Master Verification Share`;
+            const inputMaster = document.createElement('input');
+            inputMaster.type = 'text';
+            inputMaster.id = `recover-master-${shareIndex}`;
+            inputMaster.className = 'mono';
+            inputMaster.placeholder = 'E.g., abandon - 0001';
+            inputMaster.value = shareCache.masterVerificationShare || '';
+            attachAutocompleteListeners(inputMaster);
+            masterShareGroup.appendChild(labelMaster);
+            inputMaster.dataset.allowNumeric = 'true';
+            masterShareGroup.appendChild(inputMaster);
+            twoColGrid.appendChild(masterShareGroup);
+            
+            container.appendChild(twoColGrid);
 
             const seedGrid = document.createElement('div');
             seedGrid.style.display = 'grid';
@@ -1146,11 +1528,13 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     const row = document.createElement('div');
                     row.className = 'seed-word-row';
                     const label = document.createElement('label');
-                    label.textContent = `${wordCounter + 1}.`;
+                    const wordNumber = (i - 1) * wordsPerChecksum + j + 1;
+                    label.textContent = `${wordNumber}.`;
                     const input = document.createElement('input');
                     input.type = 'text';
                     input.className = 'mono';
                     input.value = shareCache.words[wordCounter] || '';
+                    input.dataset.allowNumeric = 'true';
                     attachAutocompleteListeners(input);
                     row.appendChild(label);
                     row.appendChild(input);
@@ -1165,6 +1549,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 input.type = 'text';
                 input.className = 'mono';
                 input.value = shareCache.words[wordCounter] || '';
+                input.dataset.allowNumeric = 'true';
                 attachAutocompleteListeners(input);
                 row.appendChild(label);
                 row.appendChild(input);
@@ -1184,6 +1569,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             const existingContainers = recoverSharesContainer.querySelectorAll('.share-input-container');
             existingContainers.forEach((container) => {
                 const shareNumberInput = container.querySelector('[id^="recover-x-"]');
+                const masterShareInput = container.querySelector('[id^="recover-master-"]');
                 if (!shareNumberInput) return;
                 
                 const shareIndex = parseInt(shareNumberInput.id.split('-').pop(), 10) - 1;
@@ -1191,6 +1577,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 
                 if (cacheEntry) {
                     cacheEntry.shareNumber = shareNumberInput.value;
+                    cacheEntry.masterVerificationShare = masterShareInput.value;
                     const wordInputs = container.querySelectorAll('.seed-word-row input');
                     wordInputs.forEach((input, wordIndex) => {
                         if (wordIndex < cacheEntry.words.length) {
@@ -1213,7 +1600,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         recoverKRadios.forEach(radio => radio.addEventListener('change', updateRecoverSharesInputs));
         
         // ==========================================================================
-        // SECTION 6: AUTOCOMPLETE AND VALIDATION
+        // SECTION 5: UI - AUTOCOMPLETE & VALIDATION
         // ==========================================================================
 
         /**
@@ -1383,26 +1770,340 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         }
         
         /**
+         * Attempts to extract the trailing numeric portion from an input value.
+         * Supports free-form text such as "word - 0001" or "Master Share: 1234".
+         * @param {string} value
+         * @returns {number} Parsed integer or NaN if none found.
+         */
+        function extractShareValue(value) {
+            if (!value) return NaN;
+            const match = value.trim().match(/(\d+)\s*$/);
+            return match ? parseInt(match[1], 10) : NaN;
+        }
+
+        /**
+         * Resolves a share input into a numeric value.
+         * Accepts trailing-number formats or standalone BIP39 words.
+         * @param {string} value
+         * @returns {number} Parsed integer or NaN if it cannot be resolved.
+         */
+        function resolveShareValue(value) {
+            if (!value) return NaN;
+            const trimmed = value.trim();
+            const numeric = extractShareValue(trimmed);
+            if (Number.isInteger(numeric) && numeric >= 0 && numeric < FIELD_PRIME) {
+                return numeric;
+            }
+            const normalizedWord = trimmed.toLowerCase();
+            const wordIndex = BIP39_WORDLIST.indexOf(normalizedWord);
+            if (wordIndex !== -1) {
+                return wordIndex;
+            }
+            return NaN;
+        }
+
+        /**
          * Validates an input's value on blur.
-         * A valid input is a word in the BIP39 list or a number between 0-2047.
+         * A valid input can be a BIP39 word, a number in the field, or a "word - number" pair.
          * @param {HTMLInputElement} input - The input element to validate.
          */
         function validateInput(input) {
             const value = input.value.trim();
             if (!value) {
                 input.classList.remove('invalid');
-                return;
+                return; // Still valid if empty
             }
-            const isWord = BIP39_WORDLIST.includes(value);
-            const isNumber = !isNaN(value) && Number(value) >= 0 && Number(value) <= 2047;
 
-            input.classList.toggle('invalid', !(isWord || isNumber));
+            // A valid input can be:
+            // 1. A word from the BIP39 wordlist.
+            // 2. (Optionally) A string with a numeric value in our field.
+            const normalizedWord = value.toLowerCase();
+            const isWordInList = BIP39_WORDLIST.includes(normalizedWord);
+            const allowNumeric = input.dataset.allowNumeric === 'true';
+            let isValid = isWordInList;
+
+            if (allowNumeric) {
+                const resolvedValue = resolveShareValue(value);
+                const isParsableToValidNumber = Number.isInteger(resolvedValue) && resolvedValue >= 0 && resolvedValue < FIELD_PRIME;
+                isValid = isValid || isParsableToValidNumber;
+            }
+            
+            input.classList.toggle('invalid', !isValid);
+        }
+
+        /**
+         * Clears any prior checksum-row highlights applied during recovery attempts.
+         * Only inputs explicitly marked as row highlights are reset, so user validation hints remain intact.
+         */
+        function clearAllRecoveryHighlights() {
+            const highlighted = recoverSharesContainer.querySelectorAll('[data-row-highlight="true"]');
+            highlighted.forEach(input => {
+                input.classList.remove('invalid');
+                input.removeAttribute('data-row-highlight');
+            });
+        }
+
+        /**
+         * Marks every input involved in the specified checksum row across all share forms as invalid.
+         * @param {number} rowIndex - Zero-based index of the row reported by the checksum error.
+         */
+        function highlightErrorRow(rowIndex, targetShareNumber = null) {
+            if (typeof rowIndex !== 'number' || rowIndex < 0) return;
+            const rowsPerShare = WORDS_PER_ROW + 1; // 3 words + 1 checksum input
+            const inputsPerShare = rowsPerShare * (recoverWordCount / WORDS_PER_ROW);
+            const shareContainers = recoverSharesContainer.querySelectorAll('.share-input-container');
+
+            shareContainers.forEach(container => {
+                if (targetShareNumber) {
+                    const shareNumberInput = container.querySelector('[id^="recover-x-"]');
+                    const containerShareNumber = parseInt(shareNumberInput?.value, 10);
+                    if (containerShareNumber !== targetShareNumber) {
+                        return;
+                    }
+                }
+
+                const inputs = Array.from(container.querySelectorAll('.seed-word-row input'));
+                if (inputs.length !== inputsPerShare) return;
+
+                const start = rowIndex * rowsPerShare;
+                const end = start + rowsPerShare;
+                if (start < 0 || end > inputs.length) return;
+
+                for (let i = start; i < end; i++) {
+                    const input = inputs[i];
+                    input.classList.add('invalid');
+                    input.setAttribute('data-row-highlight', 'true');
+                }
+            });
         }
         
         // ==========================================================================
-        // SECTION 7: REUSABLE UI HELPERS & GENERIC HANDLERS
+        // SECTION 6: UI - MODALS & DIALOGS
         // ==========================================================================
 
+        let modalResolve = null;
+
+        /**
+         * Displays a custom confirmation modal and returns a promise that resolves on user action.
+         * @param {string} title - The title to display in the modal.
+         * @param {string} text - The body text to display in the modal.
+         * @returns {Promise<boolean>} A promise that resolves to `true` if confirmed, `false` otherwise.
+         */
+        function showConfirmationModal(title, text) {
+            modalTitle.textContent = title;
+            modalText.textContent = text;
+            modal.style.display = 'flex';
+            return new Promise((resolve) => {
+                modalResolve = resolve;
+            });
+        }
+
+        /**
+         * A wrapper for `showConfirmationModal` tailored for displaying error messages.
+         * @param {string} title - The title of the error.
+         * @param {string} text - The detailed error message.
+         * @returns {Promise<void>} A promise that resolves when the user dismisses the modal.
+         */
+        function showErrorModal(title, text) {
+            modalTitle.textContent = title;
+            modalText.textContent = text;
+            modalConfirmBtn.textContent = 'OK';
+            modalCancelBtn.style.display = 'none';
+            modal.style.display = 'flex';
+
+            return new Promise((resolve) => {
+                modalResolve = resolve; // This will be resolved as `true` by the existing listener
+            });
+        }
+
+        modalConfirmBtn.addEventListener('click', () => {
+            if (modalResolve) modalResolve(true);
+            modal.style.display = 'none';
+            // Reset modal to its default confirmation state after use
+            modalConfirmBtn.textContent = 'Confirm';
+            modalCancelBtn.style.display = 'inline-block';
+        });
+
+        modalCancelBtn.addEventListener('click', () => {
+            if (modalResolve) modalResolve(false);
+            modal.style.display = 'none';
+        });
+
+        /**
+         * Dynamically generates and displays the share cards on Page 2.
+         * @param {Array<Object>} shares - The array of generated share data.
+         * @param {Object} metadata - The wallet metadata from the form.
+         */
+        // --- TEMPORARY DEBUG START ---
+        // To revert, comment out the TEMPORARY DEBUG line and uncomment the ORIGINAL line.
+        // function displayShares(shares, metadata) { // ORIGINAL
+        function displayShares(shares, metadata, debugCoefficients) { // TEMPORARY DEBUG
+        // --- TEMPORARY DEBUG END ---
+            const outputContainer = document.getElementById('shares-output');
+            const printContainer = document.getElementById('print-output');
+            
+            const [k, n] = metadata.scheme.split('of').map(Number);
+
+            const manualRecoveryInstructions = `
+                <div class="component-card" style="margin-top: 2rem; border-style: dashed; page-break-inside: avoid;">
+                    <h4>Manual Recovery Instructions (Pencil & Paper)</h4>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); text-align: left;">
+                        These instructions explain how to recover the original wallet phrase without a computer, using only the numbers from your share sheets. You will need at least <strong>${k} different share sheets</strong> from this set to proceed. All calculations are performed "modulo 2053", which means you divide by 2053 and take the remainder.
+                    </p>
+                    <ol style="font-size: 0.8rem; padding-left: 20px; text-align: left;">
+                        <li style="margin-bottom: 0.5em;">
+                            <strong>Find Lagrange Coefficients (γ):</strong> For the specific set of Share Numbers you have (e.g., #1, #2), you need a corresponding set of "Lagrange Coefficients". These are non-secret numbers. You can find them in the Schiavinato Sharing whitepaper for common schemes or generate them with the official tool. You will have one coefficient for each share you are using.
+                        </li>
+                        <li style="margin-bottom: 0.5em;">
+                            <strong>Recover One Number:</strong> To recover a single original number (e.g., for position #1), take the numeric value (Y) from that position on each of your ${k} share sheets. Multiply each Y value by its corresponding Lagrange Coefficient (γ). Sum all the results. The remainder of this sum when divided by 2053 is the recovered secret number.
+                            <br><em>Formula: (Y₁·γ₁ + Y₂·γ₂ + ...) mod 2053 = Secret</em>
+                        </li>
+                        <li style="margin-bottom: 0.5em;">
+                            <strong>Recover and Verify Each Row:</strong> Repeat step 2 for all three word values and the checksum value in a single row. Then, verify your math: add your three recovered word numbers together (modulo 2053). The result MUST equal your recovered checksum number for that row. If it doesn't, you have made a calculation error in that row.
+                        </li>
+                        <li style="margin-bottom: 0.5em;">
+                            <strong>Final Master Verification:</strong> After all rows are recovered and verified, use the same method from step 2 to recover the "Master Verification Number" from the share headers. Then, add all 24 of your recovered word numbers together (modulo 2053). The result MUST equal the recovered Master Verification Number. If it doesn't, an error exists in one or more rows.
+                        </li>
+                        <li style="margin-bottom: 0.5em;">
+                            <strong>Convert to Words:</strong> Once all checks pass, use the standard BIP39 wordlist to look up the word for each of your 24 recovered numbers. The resulting sequence of 24 words is your wallet's original recovery phrase.
+                        </li>
+                    </ol>
+                </div>
+            `;
+
+            let allSharesScreenHtml = '';
+            let allSharesPrintHtml = '';
+
+            shares.forEach(share => {
+                const masterValue = share.masterVerificationShare;
+                const masterWord = masterValue < 2048 ? BIP39_WORDLIST[masterValue] : String(masterValue);
+                const masterShareDisplay = `${masterWord} - ${String(masterValue).padStart(4, '0')}`;
+
+                let wordListHtml = '';
+                let wordCounter = 0;
+                for (let i = 0; i < (metadata.wordCount / 3); i++) {
+                    for (let j = 0; j < 3; j++) {
+                        const value = share.wordShares[wordCounter];
+                        const word = value < 2048 ? BIP39_WORDLIST[value] : String(value);
+                        const display = `${word} - ${String(value).padStart(4, '0')}`;
+                        wordListHtml += `<div class="share-word-item"><label>${wordCounter + 1}.</label><code class="mono">${display}</code></div>`;
+                        wordCounter++;
+                    }
+                    const checksumValue = share.checksumShares[i];
+                    const checksumWord = checksumValue < 2048 ? BIP39_WORDLIST[checksumValue] : String(checksumValue);
+                    const checksumDisplay = `${checksumWord} - ${String(checksumValue).padStart(4, '0')}`;
+                    wordListHtml += `<div class="share-word-item"><label>C${i + 1}.</label><code class="mono">${checksumDisplay}</code></div>`;
+                }
+
+                const shareContentHtml = `
+                    <h3>Share ${share.shareNumber} of ${n}</h3>
+                    <hr>
+                    <div class="share-metadata">
+                        <p><strong>Wallet Identifier:</strong> ${metadata.identifier}</p>
+                        <p><strong>Creation Date:</strong> ${metadata.date}</p>
+                        <p><strong>Scheme:</strong> ${metadata.scheme}</p>
+                        <p><strong>Share Number (X):</strong> ${share.shareNumber}</p>
+                        <p><strong>Master Verification Share:</strong> <code class="mono">${masterShareDisplay}</code></p>
+                    </div>
+                    <h4 style="margin-top: 25px; margin-bottom: 10px; color: var(--text-muted); font-weight: 600;">Share Values (Y)</h4>
+                    <div class="share-word-container">
+                        <div class="share-word-list">${wordListHtml}</div>
+                    </div>
+                `;
+
+                const printWarningHtml = `
+                    <div style="text-align: center; padding: 5px; border: 1px solid var(--error-red); background: var(--alert-error-bg); border-radius: 8px; margin-bottom: 1rem;">
+                        <strong style="color: var(--error-red);">This is 1 of ${n} shares. It CANNOT recover funds alone. Do NOT enter these words into a wallet.</strong>
+                    </div>
+                `;
+
+                allSharesScreenHtml += `<div class="component-card share-card">${shareContentHtml}</div>`;
+                allSharesPrintHtml += `<div class="component-card share-card">${printWarningHtml}${shareContentHtml}${manualRecoveryInstructions}</div>`;
+            });
+
+            outputContainer.innerHTML = allSharesScreenHtml;
+            printContainer.innerHTML = allSharesPrintHtml;
+
+            // --- TEMPORARY DEBUG START ---
+            // To revert, simply delete this entire block.
+            const existingDebugContainer = document.getElementById('debug-container'); // TEMPORARY DEBUG
+            if (existingDebugContainer) { // TEMPORARY DEBUG
+                existingDebugContainer.remove(); // TEMPORARY DEBUG
+            } // TEMPORARY DEBUG
+            if (debugCoefficients) { // TEMPORARY DEBUG
+                const debugContainer = document.createElement('div'); // TEMPORARY DEBUG
+                debugContainer.id = 'debug-container'; // TEMPORARY DEBUG
+                debugContainer.className = 'component-card'; // TEMPORARY DEBUG
+                debugContainer.style.marginTop = '2rem'; // TEMPORARY DEBUG
+                debugContainer.style.border = '2px dashed var(--error-red)'; // TEMPORARY DEBUG
+                
+                // --- TEMPORARY DEBUG START ---
+                // This block formats the debug output into a copyable textarea of raw numbers.
+                let debugTextContent = ''; // TEMPORARY DEBUG
+
+                // Words
+                debugCoefficients.words.forEach(coeffs => { // TEMPORARY DEBUG
+                    coeffs.forEach(c => { // TEMPORARY DEBUG
+                        debugTextContent += `${c}\n`; // TEMPORARY DEBUG
+                    }); // TEMPORARY DEBUG
+                }); // TEMPORARY DEBUG
+
+                // Checksums
+                debugCoefficients.checksums.forEach(coeffs => { // TEMPORARY DEBUG
+                    coeffs.forEach(c => { // TEMPORARY DEBUG
+                        debugTextContent += `${c}\n`; // TEMPORARY DEBUG
+                    }); // TEMPORARY DEBUG
+                }); // TEMPORARY DEBUG
+
+                // Master
+                debugCoefficients.master.forEach(c => { // TEMPORARY DEBUG
+                    debugTextContent += `${c}\n`; // TEMPORARY DEBUG
+                }); // TEMPORARY DEBUG
+
+                let debugHtml = '<h3 style="color: var(--error-red);">TEMPORARY DEBUG INFO: Polynomial Coefficients</h3>'; // TEMPORARY DEBUG
+                debugHtml += '<p style="font-size: 0.8rem; color: var(--text-muted);">A raw list of the random coefficients used. You can copy from the text area below.</p>'; // TEMPORARY DEBUG
+                debugHtml += `<textarea readonly class="mono" style="width: 100%; height: 250px; white-space: pre; resize: vertical; padding: 1em; border-radius: 6px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--input-text);">${debugTextContent.trim()}</textarea>`; // TEMPORARY DEBUG
+                // --- TEMPORARY DEBUG END ---
+
+                debugContainer.innerHTML = debugHtml; // TEMPORARY DEBUG
+                outputContainer.insertAdjacentElement('afterend', debugContainer); // TEMPORARY DEBUG
+            } // TEMPORARY DEBUG
+            // --- TEMPORARY DEBUG END ---
+        }
+
+        /**
+         * Dynamically generates and displays the recovered mnemonic on Page 4.
+         * @param {string} mnemonic - The recovered BIP39 mnemonic string.
+         */
+        function displayRecoveredMnemonic(mnemonic) {
+            const words = mnemonic.split(' ');
+            const container = document.querySelector('#pageRecover2 .share-word-list');
+            if (!container) return;
+
+            container.innerHTML = ''; // Clear previous results
+
+            words.forEach((word, index) => {
+                const item = document.createElement('div');
+                item.className = 'share-word-item';
+                const label = document.createElement('label');
+                label.textContent = `${index + 1}.`;
+                const code = document.createElement('code');
+                code.className = 'mono';
+                code.textContent = word;
+                item.appendChild(label);
+                item.appendChild(code);
+                container.appendChild(item);
+            });
+
+            // Adjust grid columns based on word count for better layout
+            const columns = 3;
+            container.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+        }
+
+        // ==========================================================================
+        // SECTION 7: UI - EVENT LISTENERS & INITIALIZATION
+        // ==========================================================================
+        
         /**
          * Sets up the event listeners and class toggling for a pair of 12/24 word buttons.
          * @param {HTMLButtonElement} btn12 - The 12-words button.
@@ -1458,65 +2159,11 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             'All recovered data will be lost forever. This action cannot be undone.'
         );
 
-        // ==========================================================================
-        // SECTION 8: CUSTOM MODAL
-        // ==========================================================================
-        
-        let modalResolve = null;
-
-        /**
-         * Displays a custom confirmation modal and returns a promise that resolves on user action.
-         * @param {string} title - The title to display in the modal.
-         * @param {string} text - The body text to display in the modal.
-         * @returns {Promise<boolean>} A promise that resolves to `true` if confirmed, `false` otherwise.
-         */
-        function showConfirmationModal(title, text) {
-            modalTitle.textContent = title;
-            modalText.textContent = text;
-            modal.style.display = 'flex';
-            return new Promise((resolve) => {
-                modalResolve = resolve;
-            });
-        }
-
-        modalConfirmBtn.addEventListener('click', () => {
-            if (modalResolve) modalResolve(true);
-            modal.style.display = 'none';
-        });
-
-        modalCancelBtn.addEventListener('click', () => {
-            if (modalResolve) modalResolve(false);
-            modal.style.display = 'none';
-        });
-
-        // ==========================================================================
-        // SECTION 9: ONLINE STATUS CHECKER
-        // ==========================================================================
-        
-        /**
-         * Checks the browser's online status and updates the UI indicator accordingly.
-         */
-        function updateOnlineStatus() {
-            if (navigator.onLine) {
-                connectionStatusEl.textContent = 'YOU ARE ONLINE - STOP NOW!';
-                connectionStatusEl.className = 'connection-status online';
-            } else {
-                connectionStatusEl.textContent = 'no internet detected';
-                connectionStatusEl.className = 'connection-status offline';
-            }
-        }
-
+        // Online Status Listeners
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
-        // ==========================================================================
-        // SECTION 10: INITIALIZATION
-        // ==========================================================================
-        
-        /**
-         * This listener fires when the document is fully loaded.
-         * It's used to set up the initial state of the application.
-         */
+        // DOMContentLoaded Listener (App Initialization)
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('creation-date').valueAsDate = new Date();
             
@@ -1525,42 +2172,16 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             updateRecoverSharesInputs();
 
             updateOnlineStatus();
+            // Set initial theme based on user's system preference
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                toggleTheme();
+            }
         });
 
         // ==========================================================================
-        // SECTION 11: CORE CRYPTO LOGIC (TO BE IMPLEMENTED)
+        // SECTION 8: UI - THEME TOGGLE & HELPERS
         // ==========================================================================
         
-        // Content for the dynamic scheme explanation box.
-        const explanations = {
-            '2of3': {
-                title: '2-of-3 Scheme (Ideal for couples)',
-                details: `<p><strong>Total Shares:</strong> 3</p><p><strong>Required for Recovery:</strong> 2</p><p><strong>Fault Tolerance:</strong> You can lose 1 share and still recover your wallet.</p><p><strong>Use Case:</strong> Perfect for a couple with no direct heirs. Each person keeps one share, and the third is stored in a safe or secure location. Recovery can be performed by either person by accessing the secure share.</p>`
-            },
-            '2of4': {
-                title: '2-of-4 Scheme (Geographic Flexibility)',
-                details: `<p><strong>Total Shares:</strong> 4</p><p><strong>Required for Recovery:</strong> 2</p><p><strong>Fault Tolerance:</strong> You can lose up to 2 shares.</p><p><strong>Use Case:</strong> Great for an individual who wants geographic redundancy. You can store one share at home, one at the office, one in a safe deposit box, and another with a trusted family member. You only need two to recover.</p>`
-            },
-            '3of5': {
-                title: '3-of-5 Scheme (Corporate Sovereignty)',
-                details: `<p><strong>Total Shares:</strong> 5</p><p><strong>Required for Recovery:</strong> 3</p><p><strong>Fault Tolerance:</strong> You can lose up to 2 shares.</p><p><strong>Use Case:</strong> Ideal for businesses, DAOs, or large families. It requires a quorum of 3 people to approve recovery, preventing a single malicious (or coerced) individual from accessing the funds alone.</p>`
-            }
-        };
-
-        // Truncated BIP39 English word list (first 12 and last 12)
-        const BIP39_WORDLIST = [
-            'abandon', 'ability', 'able', 'about', 'above', 'absent',
-            'absorb', 'abstract', 'absurd', 'abuse', 'access', 'accident',
-            // ... (full list would go here)
-            'zone', 'zoo', 'zulu'
-        ];
-    </script>
-
-    <!-- ==========================================================================
-    THEME TOGGLE SCRIPT
-    - A simple, self-contained script for toggling between light and dark themes.
-    ========================================================================== -->
-    <script>
         /**
          * Toggles the 'data-theme' attribute on the body to switch between themes.
          */
@@ -1578,6 +2199,2416 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 text.textContent = 'Dark Mode';
             }
         }
+
+        /**
+         * Checks the browser's online status and updates the UI indicator accordingly.
+         */
+        function updateOnlineStatus() {
+            if (navigator.onLine) {
+                connectionStatusEl.textContent = 'YOU ARE ONLINE - STOP NOW!';
+                connectionStatusEl.className = 'connection-status online';
+            } else {
+                connectionStatusEl.textContent = 'no internet detected';
+                connectionStatusEl.className = 'connection-status offline';
+            }
+        }
+
+        // ==========================================================================
+        //
+    </script>
+
+    <script>
+        // ==========================================================================
+        // CRYPTO LOGIC (GF(2053) + BIP39)
+        // ==========================================================================
+
+        const FIELD_PRIME = 2053;
+        const WORDS_PER_ROW = 3;
+
+        function mod(value) {
+            const result = value % FIELD_PRIME;
+            return result < 0 ? result + FIELD_PRIME : result;
+        }
+
+        function modAdd(a, b) {
+            return mod(a + b);
+        }
+
+        function modSub(a, b) {
+            return mod(a - b);
+        }
+
+        function modMul(a, b) {
+            return mod(a * b);
+        }
+
+        function modInv(value) {
+            const val = mod(value);
+            if (val === 0) {
+                throw new Error('Attempted to invert zero in GF(2053).');
+            }
+            let t = 0;
+            let newT = 1;
+            let r = FIELD_PRIME;
+            let newR = val;
+            while (newR !== 0) {
+                const quotient = Math.floor(r / newR);
+                [t, newT] = [newT, t - quotient * newT];
+                [r, newR] = [newR, r - quotient * newR];
+            }
+            if (r > 1) {
+                throw new Error('Value is not invertible in GF(2053).');
+            }
+            if (t < 0) {
+                t += FIELD_PRIME;
+            }
+            return t;
+        }
+
+        function getRandomIntInclusive(max) {
+            if (!window.crypto || !window.crypto.getRandomValues) {
+                throw new Error('Secure randomness (window.crypto.getRandomValues) is required.');
+            }
+            const range = max + 1;
+            if (range <= 0) {
+                throw new Error('Invalid range for randomness.');
+            }
+            const maxUint32 = 0x100000000;
+            const limit = maxUint32 - (maxUint32 % range);
+            const buffer = new Uint32Array(1);
+            let value;
+            do {
+                window.crypto.getRandomValues(buffer);
+                value = buffer[0];
+            } while (value >= limit);
+            return value % range;
+        }
+
+        function getRandomFieldElement() {
+            return getRandomIntInclusive(FIELD_PRIME - 1);
+        }
+
+        function randomPolynomial(secret, degree) {
+            const coefficients = [mod(secret)];
+            for (let i = 0; i < degree; i++) {
+                coefficients.push(getRandomFieldElement());
+            }
+            return coefficients;
+        }
+
+        function evaluatePolynomial(coefficients, x) {
+            let result = 0;
+            const fieldX = mod(x);
+            for (let i = coefficients.length - 1; i >= 0; i--) {
+                result = modAdd(modMul(result, fieldX), coefficients[i]);
+            }
+            return result;
+        }
+
+        function lagrangeInterpolateAtZero(points) {
+            if (!Array.isArray(points) || points.length === 0) {
+                throw new Error('Interpolation requires at least one point.');
+            }
+            let sum = 0;
+            for (let j = 0; j < points.length; j++) {
+                let numerator = 1;
+                let denominator = 1;
+                const xj = mod(points[j].x);
+                const yj = mod(points[j].y);
+                for (let m = 0; m < points.length; m++) {
+                    if (m === j) continue;
+                    const xm = mod(points[m].x);
+                    numerator = modMul(numerator, mod(FIELD_PRIME - xm));
+                    denominator = modMul(denominator, modSub(xj, xm));
+                }
+                const term = modMul(yj, modMul(numerator, modInv(denominator)));
+                sum = modAdd(sum, term);
+            }
+            return sum;
+        }
+
+        function sanitizeMnemonic(mnemonic) {
+            if (typeof mnemonic !== 'string') {
+                throw new Error('Mnemonic must be a string.');
+            }
+            const normalized = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
+            if (!normalized) {
+                throw new Error('Mnemonic cannot be empty.');
+            }
+            return normalized;
+        }
+
+        function ensureSupportedWordCount(wordCount) {
+            if (wordCount !== 12 && wordCount !== 24) {
+                throw new Error('This tool currently supports only 12- or 24-word mnemonics.');
+            }
+        }
+
+        function computeRowChecks(wordIndices) {
+            const rowCount = wordIndices.length / WORDS_PER_ROW;
+            const checks = [];
+            for (let row = 0; row < rowCount; row++) {
+                const base = row * WORDS_PER_ROW;
+                const sum = modAdd(modAdd(wordIndices[base], wordIndices[base + 1]), wordIndices[base + 2]);
+                checks.push(sum);
+            }
+            return checks;
+        }
+
+        function normalizeShareValue(value, label) {
+            if (!Number.isInteger(value)) {
+                throw new Error(`${label} must be an integer inside GF(2053).`);
+            }
+            if (value < 0 || value >= FIELD_PRIME) {
+                throw new Error(`${label} must be between 0 and ${FIELD_PRIME - 1}.`);
+            }
+            return value;
+        }
+
+        function validateSharesForRecovery(shares, wordCount) {
+            const rowCount = wordCount / WORDS_PER_ROW;
+            shares.forEach((share, index) => {
+                if (!Number.isInteger(share.shareNumber) || share.shareNumber <= 0 || share.shareNumber >= FIELD_PRIME) {
+                    throw new Error(`Share #${index + 1} is missing a valid share number (1-${FIELD_PRIME - 1}).`);
+                }
+                if (!Array.isArray(share.wordShares) || share.wordShares.length !== wordCount) {
+                    throw new Error(`Share #${share.shareNumber} does not contain ${wordCount} word values.`);
+                }
+                if (!Array.isArray(share.checksumShares) || share.checksumShares.length !== rowCount) {
+                    throw new Error(`Share #${share.shareNumber} does not contain ${rowCount} checksum values.`);
+                }
+                if (!Number.isInteger(share.masterVerificationShare)) {
+                    throw new Error(`Share #${share.shareNumber} is missing a master verification share.`);
+                }
+            });
+        }
+
+        function ensureShareNumbersDistinct(shares) {
+            const seen = new Set();
+            for (const share of shares) {
+                if (seen.has(share.shareNumber)) {
+                    throw new Error('Duplicate share numbers detected.');
+                }
+                seen.add(share.shareNumber);
+            }
+        }
+
+        async function splitBip39(mnemonic, k, n, wordlist) {
+            if (!Number.isInteger(k) || !Number.isInteger(n)) {
+                throw new Error('Threshold (k) and total shares (n) must be integers.');
+            }
+            if (k < 2) {
+                throw new Error('Threshold k must be at least 2.');
+            }
+            if (k > n) {
+                throw new Error('Threshold k cannot exceed n.');
+            }
+            if (n >= FIELD_PRIME) {
+                throw new Error('Total shares (n) must be less than 2053.');
+            }
+            const normalizedMnemonic = sanitizeMnemonic(mnemonic);
+            await validateBIP39Mnemonic(normalizedMnemonic, wordlist);
+            const words = normalizedMnemonic.split(' ');
+            const wordCount = words.length;
+            ensureSupportedWordCount(wordCount);
+            const wordIndices = words.map((word) => {
+                const index = wordlist.indexOf(word);
+                if (index === -1) {
+                    throw new Error(`Unknown mnemonic word: "${word}".`);
+                }
+                return index;
+            });
+            const checksumSecrets = computeRowChecks(wordIndices);
+            const masterSecret = wordIndices.reduce((acc, value) => modAdd(acc, value), 0);
+            const degree = k - 1;
+
+            // --- TEMPORARY DEBUG START ---
+            // To revert, uncomment the ORIGINAL lines and remove the TEMPORARY DEBUG lines/blocks.
+            const debugCoefficients = { words: [], checksums: [], master: null }; // TEMPORARY DEBUG
+            // const wordPolynomials = wordIndices.map((secret) => randomPolynomial(secret, degree)); // ORIGINAL
+            const wordPolynomials = wordIndices.map((secret) => { // TEMPORARY DEBUG
+                const poly = randomPolynomial(secret, degree); // TEMPORARY DEBUG
+                debugCoefficients.words.push(poly.slice(1)); // TEMPORARY DEBUG
+                return poly; // TEMPORARY DEBUG
+            }); // TEMPORARY DEBUG
+            // const checksumPolynomials = checksumSecrets.map((secret) => randomPolynomial(secret, degree)); // ORIGINAL
+            const checksumPolynomials = checksumSecrets.map((secret) => { // TEMPORARY DEBUG
+                const poly = randomPolynomial(secret, degree); // TEMPORARY DEBUG
+                debugCoefficients.checksums.push(poly.slice(1)); // TEMPORARY DEBUG
+                return poly; // TEMPORARY DEBUG
+            }); // TEMPORARY DEBUG
+            // const masterPolynomial = randomPolynomial(masterSecret, degree); // ORIGINAL
+            const masterPolynomial = randomPolynomial(masterSecret, degree); // TEMPORARY DEBUG
+            debugCoefficients.master = masterPolynomial.slice(1); // TEMPORARY DEBUG
+            // --- TEMPORARY DEBUG END ---
+            
+            const shares = [];
+            for (let shareIndex = 1; shareIndex <= n; shareIndex++) {
+                const share = {
+                    shareNumber: shareIndex,
+                    wordShares: [],
+                    checksumShares: [],
+                    masterVerificationShare: 0
+                };
+                for (const polynomial of wordPolynomials) {
+                    share.wordShares.push(evaluatePolynomial(polynomial, shareIndex));
+                }
+                for (const polynomial of checksumPolynomials) {
+                    share.checksumShares.push(evaluatePolynomial(polynomial, shareIndex));
+                }
+                share.masterVerificationShare = evaluatePolynomial(masterPolynomial, shareIndex);
+                shares.push(share);
+            }
+            // return { shares }; // ORIGINAL
+            return { shares, debugCoefficients }; // TEMPORARY DEBUG
+        }
+
+        async function recoverBip39(shares, wordCount, wordlist) {
+            if (!Array.isArray(shares) || shares.length < 2) {
+                throw new Error('At least two shares are required for recovery.');
+            }
+            ensureSupportedWordCount(wordCount);
+            if (wordCount % WORDS_PER_ROW !== 0) {
+                throw new Error('Word count must be divisible by 3.');
+            }
+            validateSharesForRecovery(shares, wordCount);
+            ensureShareNumbersDistinct(shares);
+            const rowCount = wordCount / WORDS_PER_ROW;
+            const recoveredWords = [];
+            for (let i = 0; i < wordCount; i++) {
+                const points = shares.map((share) => ({
+                    x: mod(share.shareNumber),
+                    y: normalizeShareValue(share.wordShares[i], `Word share #${i + 1} (share ${share.shareNumber})`)
+                }));
+                recoveredWords.push(lagrangeInterpolateAtZero(points));
+            }
+            const recoveredChecks = [];
+            for (let row = 0; row < rowCount; row++) {
+                const points = shares.map((share) => ({
+                    x: mod(share.shareNumber),
+                    y: normalizeShareValue(share.checksumShares[row], `Checksum share C${row + 1} (share ${share.shareNumber})`)
+                }));
+                recoveredChecks.push(lagrangeInterpolateAtZero(points));
+            }
+            const recomputedChecks = computeRowChecks(recoveredWords);
+            for (let row = 0; row < rowCount; row++) {
+                if (recoveredChecks[row] !== recomputedChecks[row]) {
+                    throw new ChecksumError(`Checksum verification failed for row ${row + 1}.`, row);
+                }
+            }
+            const masterPoints = shares.map((share) => ({
+                x: mod(share.shareNumber),
+                y: normalizeShareValue(share.masterVerificationShare, `Master verification (share ${share.shareNumber})`)
+            }));
+            const recoveredMaster = lagrangeInterpolateAtZero(masterPoints);
+            const recomputedMaster = recoveredWords.reduce((acc, value) => modAdd(acc, value), 0);
+            if (recoveredMaster !== recomputedMaster) {
+                throw new Error('Master verification number mismatch. Please double-check the input shares.');
+            }
+            recoveredWords.forEach((value, index) => {
+                if (value < 0 || value >= 2048) {
+                    throw new Error(`Recovered word #${index + 1} is outside the BIP39 range (0–2047).`);
+                }
+            });
+            const mnemonic = recoveredWords.map((index) => wordlist[index]).join(' ');
+            await validateBIP39Mnemonic(mnemonic, wordlist);
+            return mnemonic;
+        }
+
+        function bytesToBinary(bytes) {
+            return Array.from(bytes).map((b) => b.toString(2).padStart(8, '0')).join('');
+        }
+
+        async function computeSha256(data) {
+            if (typeof sha256 !== 'function' || typeof sha256.arrayBuffer !== 'function') {
+                throw new Error('Embedded SHA-256 implementation is not available.');
+            }
+            return new Uint8Array(sha256.arrayBuffer(data));
+        }
+
+        async function validateBIP39Mnemonic(mnemonic, wordlist) {
+            const words = mnemonic.trim().split(/\s+/);
+            const wordCount = words.length;
+            if (wordCount % 3 !== 0 || wordCount < 12 || wordCount > 24) {
+                throw new Error(`Invalid mnemonic length: expected 12, 15, 18, 21, or 24 words, received ${wordCount}.`);
+            }
+            let binaryMnemonic = '';
+            for (const word of words) {
+                const index = wordlist.indexOf(word);
+                if (index === -1) {
+                    throw new Error(`Invalid mnemonic word: "${word}" is not in the BIP39 list.`);
+                }
+                binaryMnemonic += index.toString(2).padStart(11, '0');
+            }
+            const entropyBits = (wordCount * 11) - (wordCount / 3);
+            const checksumLength = wordCount / 3;
+            const entropyBinary = binaryMnemonic.substring(0, entropyBits);
+            const checksumBinary = binaryMnemonic.substring(entropyBits);
+            const entropyBytes = new Uint8Array(entropyBits / 8);
+            for (let i = 0; i < (entropyBits / 8); i++) {
+                const byteString = entropyBinary.substr(i * 8, 8);
+                entropyBytes[i] = parseInt(byteString, 2);
+            }
+            const hashBytes = await computeSha256(entropyBytes);
+            const hashBinary = bytesToBinary(hashBytes);
+            const derivedChecksum = hashBinary.substring(0, checksumLength);
+            if (derivedChecksum !== checksumBinary) {
+                throw new Error('Mnemonic checksum is invalid.');
+            }
+            return true;
+        }
+
+        // BIP39 English wordlist (2048 words)
+        const BIP39_WORDLIST = [
+            "abandon",
+            "ability",
+            "able",
+            "about",
+            "above",
+            "absent",
+            "absorb",
+            "abstract",
+            "absurd",
+            "abuse",
+            "access",
+            "accident",
+            "account",
+            "accuse",
+            "achieve",
+            "acid",
+            "acoustic",
+            "acquire",
+            "across",
+            "act",
+            "action",
+            "actor",
+            "actress",
+            "actual",
+            "adapt",
+            "add",
+            "addict",
+            "address",
+            "adjust",
+            "admit",
+            "adult",
+            "advance",
+            "advice",
+            "aerobic",
+            "affair",
+            "afford",
+            "afraid",
+            "again",
+            "age",
+            "agent",
+            "agree",
+            "ahead",
+            "aim",
+            "air",
+            "airport",
+            "aisle",
+            "alarm",
+            "album",
+            "alcohol",
+            "alert",
+            "alien",
+            "all",
+            "alley",
+            "allow",
+            "almost",
+            "alone",
+            "alpha",
+            "already",
+            "also",
+            "alter",
+            "always",
+            "amateur",
+            "amazing",
+            "among",
+            "amount",
+            "amused",
+            "analyst",
+            "anchor",
+            "ancient",
+            "anger",
+            "angle",
+            "angry",
+            "animal",
+            "ankle",
+            "announce",
+            "annual",
+            "another",
+            "answer",
+            "antenna",
+            "antique",
+            "anxiety",
+            "any",
+            "apart",
+            "apology",
+            "appear",
+            "apple",
+            "approve",
+            "april",
+            "arch",
+            "arctic",
+            "area",
+            "arena",
+            "argue",
+            "arm",
+            "armed",
+            "armor",
+            "army",
+            "around",
+            "arrange",
+            "arrest",
+            "arrive",
+            "arrow",
+            "art",
+            "artefact",
+            "artist",
+            "artwork",
+            "ask",
+            "aspect",
+            "assault",
+            "asset",
+            "assist",
+            "assume",
+            "asthma",
+            "athlete",
+            "atom",
+            "attack",
+            "attend",
+            "attitude",
+            "attract",
+            "auction",
+            "audit",
+            "august",
+            "aunt",
+            "author",
+            "auto",
+            "autumn",
+            "average",
+            "avocado",
+            "avoid",
+            "awake",
+            "aware",
+            "away",
+            "awesome",
+            "awful",
+            "awkward",
+            "axis",
+            "baby",
+            "bachelor",
+            "bacon",
+            "badge",
+            "bag",
+            "balance",
+            "balcony",
+            "ball",
+            "bamboo",
+            "banana",
+            "banner",
+            "bar",
+            "barely",
+            "bargain",
+            "barrel",
+            "base",
+            "basic",
+            "basket",
+            "battle",
+            "beach",
+            "bean",
+            "beauty",
+            "because",
+            "become",
+            "beef",
+            "before",
+            "begin",
+            "behave",
+            "behind",
+            "believe",
+            "below",
+            "belt",
+            "bench",
+            "benefit",
+            "best",
+            "betray",
+            "better",
+            "between",
+            "beyond",
+            "bicycle",
+            "bid",
+            "bike",
+            "bind",
+            "biology",
+            "bird",
+            "birth",
+            "bitter",
+            "black",
+            "blade",
+            "blame",
+            "blanket",
+            "blast",
+            "bleak",
+            "bless",
+            "blind",
+            "blood",
+            "blossom",
+            "blouse",
+            "blue",
+            "blur",
+            "blush",
+            "board",
+            "boat",
+            "body",
+            "boil",
+            "bomb",
+            "bone",
+            "bonus",
+            "book",
+            "boost",
+            "border",
+            "boring",
+            "borrow",
+            "boss",
+            "bottom",
+            "bounce",
+            "box",
+            "boy",
+            "bracket",
+            "brain",
+            "brand",
+            "brass",
+            "brave",
+            "bread",
+            "breeze",
+            "brick",
+            "bridge",
+            "brief",
+            "bright",
+            "bring",
+            "brisk",
+            "broccoli",
+            "broken",
+            "bronze",
+            "broom",
+            "brother",
+            "brown",
+            "brush",
+            "bubble",
+            "buddy",
+            "budget",
+            "buffalo",
+            "build",
+            "bulb",
+            "bulk",
+            "bullet",
+            "bundle",
+            "bunker",
+            "burden",
+            "burger",
+            "burst",
+            "bus",
+            "business",
+            "busy",
+            "butter",
+            "buyer",
+            "buzz",
+            "cabbage",
+            "cabin",
+            "cable",
+            "cactus",
+            "cage",
+            "cake",
+            "call",
+            "calm",
+            "camera",
+            "camp",
+            "can",
+            "canal",
+            "cancel",
+            "candy",
+            "cannon",
+            "canoe",
+            "canvas",
+            "canyon",
+            "capable",
+            "capital",
+            "captain",
+            "car",
+            "carbon",
+            "card",
+            "cargo",
+            "carpet",
+            "carry",
+            "cart",
+            "case",
+            "cash",
+            "casino",
+            "castle",
+            "casual",
+            "cat",
+            "catalog",
+            "catch",
+            "category",
+            "cattle",
+            "caught",
+            "cause",
+            "caution",
+            "cave",
+            "ceiling",
+            "celery",
+            "cement",
+            "census",
+            "century",
+            "cereal",
+            "certain",
+            "chair",
+            "chalk",
+            "champion",
+            "change",
+            "chaos",
+            "chapter",
+            "charge",
+            "chase",
+            "chat",
+            "cheap",
+            "check",
+            "cheese",
+            "chef",
+            "cherry",
+            "chest",
+            "chicken",
+            "chief",
+            "child",
+            "chimney",
+            "choice",
+            "choose",
+            "chronic",
+            "chuckle",
+            "chunk",
+            "churn",
+            "cigar",
+            "cinnamon",
+            "circle",
+            "citizen",
+            "city",
+            "civil",
+            "claim",
+            "clap",
+            "clarify",
+            "claw",
+            "clay",
+            "clean",
+            "clerk",
+            "clever",
+            "click",
+            "client",
+            "cliff",
+            "climb",
+            "clinic",
+            "clip",
+            "clock",
+            "clog",
+            "close",
+            "cloth",
+            "cloud",
+            "clown",
+            "club",
+            "clump",
+            "cluster",
+            "clutch",
+            "coach",
+            "coast",
+            "coconut",
+            "code",
+            "coffee",
+            "coil",
+            "coin",
+            "collect",
+            "color",
+            "column",
+            "combine",
+            "come",
+            "comfort",
+            "comic",
+            "common",
+            "company",
+            "concert",
+            "conduct",
+            "confirm",
+            "congress",
+            "connect",
+            "consider",
+            "control",
+            "convince",
+            "cook",
+            "cool",
+            "copper",
+            "copy",
+            "coral",
+            "core",
+            "corn",
+            "correct",
+            "cost",
+            "cotton",
+            "couch",
+            "country",
+            "couple",
+            "course",
+            "cousin",
+            "cover",
+            "coyote",
+            "crack",
+            "cradle",
+            "craft",
+            "cram",
+            "crane",
+            "crash",
+            "crater",
+            "crawl",
+            "crazy",
+            "cream",
+            "credit",
+            "creek",
+            "crew",
+            "cricket",
+            "crime",
+            "crisp",
+            "critic",
+            "crop",
+            "cross",
+            "crouch",
+            "crowd",
+            "crucial",
+            "cruel",
+            "cruise",
+            "crumble",
+            "crunch",
+            "crush",
+            "cry",
+            "crystal",
+            "cube",
+            "culture",
+            "cup",
+            "cupboard",
+            "curious",
+            "current",
+            "curtain",
+            "curve",
+            "cushion",
+            "custom",
+            "cute",
+            "cycle",
+            "dad",
+            "damage",
+            "damp",
+            "dance",
+            "danger",
+            "daring",
+            "dash",
+            "daughter",
+            "dawn",
+            "day",
+            "deal",
+            "debate",
+            "debris",
+            "decade",
+            "december",
+            "decide",
+            "decline",
+            "decorate",
+            "decrease",
+            "deer",
+            "defense",
+            "define",
+            "defy",
+            "degree",
+            "delay",
+            "deliver",
+            "demand",
+            "demise",
+            "denial",
+            "dentist",
+            "deny",
+            "depart",
+            "depend",
+            "deposit",
+            "depth",
+            "deputy",
+            "derive",
+            "describe",
+            "desert",
+            "design",
+            "desk",
+            "despair",
+            "destroy",
+            "detail",
+            "detect",
+            "develop",
+            "device",
+            "devote",
+            "diagram",
+            "dial",
+            "diamond",
+            "diary",
+            "dice",
+            "diesel",
+            "diet",
+            "differ",
+            "digital",
+            "dignity",
+            "dilemma",
+            "dinner",
+            "dinosaur",
+            "direct",
+            "dirt",
+            "disagree",
+            "discover",
+            "disease",
+            "dish",
+            "dismiss",
+            "disorder",
+            "display",
+            "distance",
+            "divert",
+            "divide",
+            "divorce",
+            "dizzy",
+            "doctor",
+            "document",
+            "dog",
+            "doll",
+            "dolphin",
+            "domain",
+            "donate",
+            "donkey",
+            "donor",
+            "door",
+            "dose",
+            "double",
+            "dove",
+            "draft",
+            "dragon",
+            "drama",
+            "drastic",
+            "draw",
+            "dream",
+            "dress",
+            "drift",
+            "drill",
+            "drink",
+            "drip",
+            "drive",
+            "drop",
+            "drum",
+            "dry",
+            "duck",
+            "dumb",
+            "dune",
+            "during",
+            "dust",
+            "dutch",
+            "duty",
+            "dwarf",
+            "dynamic",
+            "eager",
+            "eagle",
+            "early",
+            "earn",
+            "earth",
+            "easily",
+            "east",
+            "easy",
+            "echo",
+            "ecology",
+            "economy",
+            "edge",
+            "edit",
+            "educate",
+            "effort",
+            "egg",
+            "eight",
+            "either",
+            "elbow",
+            "elder",
+            "electric",
+            "elegant",
+            "element",
+            "elephant",
+            "elevator",
+            "elite",
+            "else",
+            "embark",
+            "embody",
+            "embrace",
+            "emerge",
+            "emotion",
+            "employ",
+            "empower",
+            "empty",
+            "enable",
+            "enact",
+            "end",
+            "endless",
+            "endorse",
+            "enemy",
+            "energy",
+            "enforce",
+            "engage",
+            "engine",
+            "enhance",
+            "enjoy",
+            "enlist",
+            "enough",
+            "enrich",
+            "enroll",
+            "ensure",
+            "enter",
+            "entire",
+            "entry",
+            "envelope",
+            "episode",
+            "equal",
+            "equip",
+            "era",
+            "erase",
+            "erode",
+            "erosion",
+            "error",
+            "erupt",
+            "escape",
+            "essay",
+            "essence",
+            "estate",
+            "eternal",
+            "ethics",
+            "evidence",
+            "evil",
+            "evoke",
+            "evolve",
+            "exact",
+            "example",
+            "excess",
+            "exchange",
+            "excite",
+            "exclude",
+            "excuse",
+            "execute",
+            "exercise",
+            "exhaust",
+            "exhibit",
+            "exile",
+            "exist",
+            "exit",
+            "exotic",
+            "expand",
+            "expect",
+            "expire",
+            "explain",
+            "expose",
+            "express",
+            "extend",
+            "extra",
+            "eye",
+            "eyebrow",
+            "fabric",
+            "face",
+            "faculty",
+            "fade",
+            "faint",
+            "faith",
+            "fall",
+            "false",
+            "fame",
+            "family",
+            "famous",
+            "fan",
+            "fancy",
+            "fantasy",
+            "farm",
+            "fashion",
+            "fat",
+            "fatal",
+            "father",
+            "fatigue",
+            "fault",
+            "favorite",
+            "feature",
+            "february",
+            "federal",
+            "fee",
+            "feed",
+            "feel",
+            "female",
+            "fence",
+            "festival",
+            "fetch",
+            "fever",
+            "few",
+            "fiber",
+            "fiction",
+            "field",
+            "figure",
+            "file",
+            "film",
+            "filter",
+            "final",
+            "find",
+            "fine",
+            "finger",
+            "finish",
+            "fire",
+            "firm",
+            "first",
+            "fiscal",
+            "fish",
+            "fit",
+            "fitness",
+            "fix",
+            "flag",
+            "flame",
+            "flash",
+            "flat",
+            "flavor",
+            "flee",
+            "flight",
+            "flip",
+            "float",
+            "flock",
+            "floor",
+            "flower",
+            "fluid",
+            "flush",
+            "fly",
+            "foam",
+            "focus",
+            "fog",
+            "foil",
+            "fold",
+            "follow",
+            "food",
+            "foot",
+            "force",
+            "forest",
+            "forget",
+            "fork",
+            "fortune",
+            "forum",
+            "forward",
+            "fossil",
+            "foster",
+            "found",
+            "fox",
+            "fragile",
+            "frame",
+            "frequent",
+            "fresh",
+            "friend",
+            "fringe",
+            "frog",
+            "front",
+            "frost",
+            "frown",
+            "frozen",
+            "fruit",
+            "fuel",
+            "fun",
+            "funny",
+            "furnace",
+            "fury",
+            "future",
+            "gadget",
+            "gain",
+            "galaxy",
+            "gallery",
+            "game",
+            "gap",
+            "garage",
+            "garbage",
+            "garden",
+            "garlic",
+            "garment",
+            "gas",
+            "gasp",
+            "gate",
+            "gather",
+            "gauge",
+            "gaze",
+            "general",
+            "genius",
+            "genre",
+            "gentle",
+            "genuine",
+            "gesture",
+            "ghost",
+            "giant",
+            "gift",
+            "giggle",
+            "ginger",
+            "giraffe",
+            "girl",
+            "give",
+            "glad",
+            "glance",
+            "glare",
+            "glass",
+            "glide",
+            "glimpse",
+            "globe",
+            "gloom",
+            "glory",
+            "glove",
+            "glow",
+            "glue",
+            "goat",
+            "goddess",
+            "gold",
+            "good",
+            "goose",
+            "gorilla",
+            "gospel",
+            "gossip",
+            "govern",
+            "gown",
+            "grab",
+            "grace",
+            "grain",
+            "grant",
+            "grape",
+            "grass",
+            "gravity",
+            "great",
+            "green",
+            "grid",
+            "grief",
+            "grit",
+            "grocery",
+            "group",
+            "grow",
+            "grunt",
+            "guard",
+            "guess",
+            "guide",
+            "guilt",
+            "guitar",
+            "gun",
+            "gym",
+            "habit",
+            "hair",
+            "half",
+            "hammer",
+            "hamster",
+            "hand",
+            "happy",
+            "harbor",
+            "hard",
+            "harsh",
+            "harvest",
+            "hat",
+            "have",
+            "hawk",
+            "hazard",
+            "head",
+            "health",
+            "heart",
+            "heavy",
+            "hedgehog",
+            "height",
+            "hello",
+            "helmet",
+            "help",
+            "hen",
+            "hero",
+            "hidden",
+            "high",
+            "hill",
+            "hint",
+            "hip",
+            "hire",
+            "history",
+            "hobby",
+            "hockey",
+            "hold",
+            "hole",
+            "holiday",
+            "hollow",
+            "home",
+            "honey",
+            "hood",
+            "hope",
+            "horn",
+            "horror",
+            "horse",
+            "hospital",
+            "host",
+            "hotel",
+            "hour",
+            "hover",
+            "hub",
+            "huge",
+            "human",
+            "humble",
+            "humor",
+            "hundred",
+            "hungry",
+            "hunt",
+            "hurdle",
+            "hurry",
+            "hurt",
+            "husband",
+            "hybrid",
+            "ice",
+            "icon",
+            "idea",
+            "identify",
+            "idle",
+            "ignore",
+            "ill",
+            "illegal",
+            "illness",
+            "image",
+            "imitate",
+            "immense",
+            "immune",
+            "impact",
+            "impose",
+            "improve",
+            "impulse",
+            "inch",
+            "include",
+            "income",
+            "increase",
+            "index",
+            "indicate",
+            "indoor",
+            "industry",
+            "infant",
+            "inflict",
+            "inform",
+            "inhale",
+            "inherit",
+            "initial",
+            "inject",
+            "injury",
+            "inmate",
+            "inner",
+            "innocent",
+            "input",
+            "inquiry",
+            "insane",
+            "insect",
+            "inside",
+            "inspire",
+            "install",
+            "intact",
+            "interest",
+            "into",
+            "invest",
+            "invite",
+            "involve",
+            "iron",
+            "island",
+            "isolate",
+            "issue",
+            "item",
+            "ivory",
+            "jacket",
+            "jaguar",
+            "jar",
+            "jazz",
+            "jealous",
+            "jeans",
+            "jelly",
+            "jewel",
+            "job",
+            "join",
+            "joke",
+            "journey",
+            "joy",
+            "judge",
+            "juice",
+            "jump",
+            "jungle",
+            "junior",
+            "junk",
+            "just",
+            "kangaroo",
+            "keen",
+            "keep",
+            "ketchup",
+            "key",
+            "kick",
+            "kid",
+            "kidney",
+            "kind",
+            "kingdom",
+            "kiss",
+            "kit",
+            "kitchen",
+            "kite",
+            "kitten",
+            "kiwi",
+            "knee",
+            "knife",
+            "knock",
+            "know",
+            "lab",
+            "label",
+            "labor",
+            "ladder",
+            "lady",
+            "lake",
+            "lamp",
+            "language",
+            "laptop",
+            "large",
+            "later",
+            "latin",
+            "laugh",
+            "laundry",
+            "lava",
+            "law",
+            "lawn",
+            "lawsuit",
+            "layer",
+            "lazy",
+            "leader",
+            "leaf",
+            "learn",
+            "leave",
+            "lecture",
+            "left",
+            "leg",
+            "legal",
+            "legend",
+            "leisure",
+            "lemon",
+            "lend",
+            "length",
+            "lens",
+            "leopard",
+            "lesson",
+            "letter",
+            "level",
+            "liar",
+            "liberty",
+            "library",
+            "license",
+            "life",
+            "lift",
+            "light",
+            "like",
+            "limb",
+            "limit",
+            "link",
+            "lion",
+            "liquid",
+            "list",
+            "little",
+            "live",
+            "lizard",
+            "load",
+            "loan",
+            "lobster",
+            "local",
+            "lock",
+            "logic",
+            "lonely",
+            "long",
+            "loop",
+            "lottery",
+            "loud",
+            "lounge",
+            "love",
+            "loyal",
+            "lucky",
+            "luggage",
+            "lumber",
+            "lunar",
+            "lunch",
+            "luxury",
+            "lyrics",
+            "machine",
+            "mad",
+            "magic",
+            "magnet",
+            "maid",
+            "mail",
+            "main",
+            "major",
+            "make",
+            "mammal",
+            "man",
+            "manage",
+            "mandate",
+            "mango",
+            "mansion",
+            "manual",
+            "maple",
+            "marble",
+            "march",
+            "margin",
+            "marine",
+            "market",
+            "marriage",
+            "mask",
+            "mass",
+            "master",
+            "match",
+            "material",
+            "math",
+            "matrix",
+            "matter",
+            "maximum",
+            "maze",
+            "meadow",
+            "mean",
+            "measure",
+            "meat",
+            "mechanic",
+            "medal",
+            "media",
+            "melody",
+            "melt",
+            "member",
+            "memory",
+            "mention",
+            "menu",
+            "mercy",
+            "merge",
+            "merit",
+            "merry",
+            "mesh",
+            "message",
+            "metal",
+            "method",
+            "middle",
+            "midnight",
+            "milk",
+            "million",
+            "mimic",
+            "mind",
+            "minimum",
+            "minor",
+            "minute",
+            "miracle",
+            "mirror",
+            "misery",
+            "miss",
+            "mistake",
+            "mix",
+            "mixed",
+            "mixture",
+            "mobile",
+            "model",
+            "modify",
+            "mom",
+            "moment",
+            "monitor",
+            "monkey",
+            "monster",
+            "month",
+            "moon",
+            "moral",
+            "more",
+            "morning",
+            "mosquito",
+            "mother",
+            "motion",
+            "motor",
+            "mountain",
+            "mouse",
+            "move",
+            "movie",
+            "much",
+            "muffin",
+            "mule",
+            "multiply",
+            "muscle",
+            "museum",
+            "mushroom",
+            "music",
+            "must",
+            "mutual",
+            "myself",
+            "mystery",
+            "myth",
+            "naive",
+            "name",
+            "napkin",
+            "narrow",
+            "nasty",
+            "nation",
+            "nature",
+            "near",
+            "neck",
+            "need",
+            "negative",
+            "neglect",
+            "neither",
+            "nephew",
+            "nerve",
+            "nest",
+            "net",
+            "network",
+            "neutral",
+            "never",
+            "news",
+            "next",
+            "nice",
+            "night",
+            "noble",
+            "noise",
+            "nominee",
+            "noodle",
+            "normal",
+            "north",
+            "nose",
+            "notable",
+            "note",
+            "nothing",
+            "notice",
+            "novel",
+            "now",
+            "nuclear",
+            "number",
+            "nurse",
+            "nut",
+            "oak",
+            "obey",
+            "object",
+            "oblige",
+            "obscure",
+            "observe",
+            "obtain",
+            "obvious",
+            "occur",
+            "ocean",
+            "october",
+            "odor",
+            "off",
+            "offer",
+            "office",
+            "often",
+            "oil",
+            "okay",
+            "old",
+            "olive",
+            "olympic",
+            "omit",
+            "once",
+            "one",
+            "onion",
+            "online",
+            "only",
+            "open",
+            "opera",
+            "opinion",
+            "oppose",
+            "option",
+            "orange",
+            "orbit",
+            "orchard",
+            "order",
+            "ordinary",
+            "organ",
+            "orient",
+            "original",
+            "orphan",
+            "ostrich",
+            "other",
+            "outdoor",
+            "outer",
+            "output",
+            "outside",
+            "oval",
+            "oven",
+            "over",
+            "own",
+            "owner",
+            "oxygen",
+            "oyster",
+            "ozone",
+            "pact",
+            "paddle",
+            "page",
+            "pair",
+            "palace",
+            "palm",
+            "panda",
+            "panel",
+            "panic",
+            "panther",
+            "paper",
+            "parade",
+            "parent",
+            "park",
+            "parrot",
+            "party",
+            "pass",
+            "patch",
+            "path",
+            "patient",
+            "patrol",
+            "pattern",
+            "pause",
+            "pave",
+            "payment",
+            "peace",
+            "peanut",
+            "pear",
+            "peasant",
+            "pelican",
+            "pen",
+            "penalty",
+            "pencil",
+            "people",
+            "pepper",
+            "perfect",
+            "permit",
+            "person",
+            "pet",
+            "phone",
+            "photo",
+            "phrase",
+            "physical",
+            "piano",
+            "picnic",
+            "picture",
+            "piece",
+            "pig",
+            "pigeon",
+            "pill",
+            "pilot",
+            "pink",
+            "pioneer",
+            "pipe",
+            "pistol",
+            "pitch",
+            "pizza",
+            "place",
+            "planet",
+            "plastic",
+            "plate",
+            "play",
+            "please",
+            "pledge",
+            "pluck",
+            "plug",
+            "plunge",
+            "poem",
+            "poet",
+            "point",
+            "polar",
+            "pole",
+            "police",
+            "pond",
+            "pony",
+            "pool",
+            "popular",
+            "portion",
+            "position",
+            "possible",
+            "post",
+            "potato",
+            "pottery",
+            "poverty",
+            "powder",
+            "power",
+            "practice",
+            "praise",
+            "predict",
+            "prefer",
+            "prepare",
+            "present",
+            "pretty",
+            "prevent",
+            "price",
+            "pride",
+            "primary",
+            "print",
+            "priority",
+            "prison",
+            "private",
+            "prize",
+            "problem",
+            "process",
+            "produce",
+            "profit",
+            "program",
+            "project",
+            "promote",
+            "proof",
+            "property",
+            "prosper",
+            "protect",
+            "proud",
+            "provide",
+            "public",
+            "pudding",
+            "pull",
+            "pulp",
+            "pulse",
+            "pumpkin",
+            "punch",
+            "pupil",
+            "puppy",
+            "purchase",
+            "purity",
+            "purpose",
+            "purse",
+            "push",
+            "put",
+            "puzzle",
+            "pyramid",
+            "quality",
+            "quantum",
+            "quarter",
+            "question",
+            "quick",
+            "quit",
+            "quiz",
+            "quote",
+            "rabbit",
+            "raccoon",
+            "race",
+            "rack",
+            "radar",
+            "radio",
+            "rail",
+            "rain",
+            "raise",
+            "rally",
+            "ramp",
+            "ranch",
+            "random",
+            "range",
+            "rapid",
+            "rare",
+            "rate",
+            "rather",
+            "raven",
+            "raw",
+            "razor",
+            "ready",
+            "real",
+            "reason",
+            "rebel",
+            "rebuild",
+            "recall",
+            "receive",
+            "recipe",
+            "record",
+            "recycle",
+            "reduce",
+            "reflect",
+            "reform",
+            "refuse",
+            "region",
+            "regret",
+            "regular",
+            "reject",
+            "relax",
+            "release",
+            "relief",
+            "rely",
+            "remain",
+            "remember",
+            "remind",
+            "remove",
+            "render",
+            "renew",
+            "rent",
+            "reopen",
+            "repair",
+            "repeat",
+            "replace",
+            "report",
+            "require",
+            "rescue",
+            "resemble",
+            "resist",
+            "resource",
+            "response",
+            "result",
+            "retire",
+            "retreat",
+            "return",
+            "reunion",
+            "reveal",
+            "review",
+            "reward",
+            "rhythm",
+            "rib",
+            "ribbon",
+            "rice",
+            "rich",
+            "ride",
+            "ridge",
+            "rifle",
+            "right",
+            "rigid",
+            "ring",
+            "riot",
+            "ripple",
+            "risk",
+            "ritual",
+            "rival",
+            "river",
+            "road",
+            "roast",
+            "robot",
+            "robust",
+            "rocket",
+            "romance",
+            "roof",
+            "rookie",
+            "room",
+            "rose",
+            "rotate",
+            "rough",
+            "round",
+            "route",
+            "royal",
+            "rubber",
+            "rude",
+            "rug",
+            "rule",
+            "run",
+            "runway",
+            "rural",
+            "sad",
+            "saddle",
+            "sadness",
+            "safe",
+            "sail",
+            "salad",
+            "salmon",
+            "salon",
+            "salt",
+            "salute",
+            "same",
+            "sample",
+            "sand",
+            "satisfy",
+            "satoshi",
+            "sauce",
+            "sausage",
+            "save",
+            "say",
+            "scale",
+            "scan",
+            "scare",
+            "scatter",
+            "scene",
+            "scheme",
+            "school",
+            "science",
+            "scissors",
+            "scorpion",
+            "scout",
+            "scrap",
+            "screen",
+            "script",
+            "scrub",
+            "sea",
+            "search",
+            "season",
+            "seat",
+            "second",
+            "secret",
+            "section",
+            "security",
+            "seed",
+            "seek",
+            "segment",
+            "select",
+            "sell",
+            "seminar",
+            "senior",
+            "sense",
+            "sentence",
+            "series",
+            "service",
+            "session",
+            "settle",
+            "setup",
+            "seven",
+            "shadow",
+            "shaft",
+            "shallow",
+            "share",
+            "shed",
+            "shell",
+            "sheriff",
+            "shield",
+            "shift",
+            "shine",
+            "ship",
+            "shiver",
+            "shock",
+            "shoe",
+            "shoot",
+            "shop",
+            "short",
+            "shoulder",
+            "shove",
+            "shrimp",
+            "shrug",
+            "shuffle",
+            "shy",
+            "sibling",
+            "sick",
+            "side",
+            "siege",
+            "sight",
+            "sign",
+            "silent",
+            "silk",
+            "silly",
+            "silver",
+            "similar",
+            "simple",
+            "since",
+            "sing",
+            "siren",
+            "sister",
+            "situate",
+            "six",
+            "size",
+            "skate",
+            "sketch",
+            "ski",
+            "skill",
+            "skin",
+            "skirt",
+            "skull",
+            "slab",
+            "slam",
+            "sleep",
+            "slender",
+            "slice",
+            "slide",
+            "slight",
+            "slim",
+            "slogan",
+            "slot",
+            "slow",
+            "slush",
+            "small",
+            "smart",
+            "smile",
+            "smoke",
+            "smooth",
+            "snack",
+            "snake",
+            "snap",
+            "sniff",
+            "snow",
+            "soap",
+            "soccer",
+            "social",
+            "sock",
+            "soda",
+            "soft",
+            "solar",
+            "soldier",
+            "solid",
+            "solution",
+            "solve",
+            "someone",
+            "song",
+            "soon",
+            "sorry",
+            "sort",
+            "soul",
+            "sound",
+            "soup",
+            "source",
+            "south",
+            "space",
+            "spare",
+            "spatial",
+            "spawn",
+            "speak",
+            "special",
+            "speed",
+            "spell",
+            "spend",
+            "sphere",
+            "spice",
+            "spider",
+            "spike",
+            "spin",
+            "spirit",
+            "split",
+            "spoil",
+            "sponsor",
+            "spoon",
+            "sport",
+            "spot",
+            "spray",
+            "spread",
+            "spring",
+            "spy",
+            "square",
+            "squeeze",
+            "squirrel",
+            "stable",
+            "stadium",
+            "staff",
+            "stage",
+            "stairs",
+            "stamp",
+            "stand",
+            "start",
+            "state",
+            "stay",
+            "steak",
+            "steel",
+            "stem",
+            "step",
+            "stereo",
+            "stick",
+            "still",
+            "sting",
+            "stock",
+            "stomach",
+            "stone",
+            "stool",
+            "story",
+            "stove",
+            "strategy",
+            "street",
+            "strike",
+            "strong",
+            "struggle",
+            "student",
+            "stuff",
+            "stumble",
+            "style",
+            "subject",
+            "submit",
+            "subway",
+            "success",
+            "such",
+            "sudden",
+            "suffer",
+            "sugar",
+            "suggest",
+            "suit",
+            "summer",
+            "sun",
+            "sunny",
+            "sunset",
+            "super",
+            "supply",
+            "supreme",
+            "sure",
+            "surface",
+            "surge",
+            "surprise",
+            "surround",
+            "survey",
+            "suspect",
+            "sustain",
+            "swallow",
+            "swamp",
+            "swap",
+            "swarm",
+            "swear",
+            "sweet",
+            "swift",
+            "swim",
+            "swing",
+            "switch",
+            "sword",
+            "symbol",
+            "symptom",
+            "syrup",
+            "system",
+            "table",
+            "tackle",
+            "tag",
+            "tail",
+            "talent",
+            "talk",
+            "tank",
+            "tape",
+            "target",
+            "task",
+            "taste",
+            "tattoo",
+            "taxi",
+            "teach",
+            "team",
+            "tell",
+            "ten",
+            "tenant",
+            "tennis",
+            "tent",
+            "term",
+            "test",
+            "text",
+            "thank",
+            "that",
+            "theme",
+            "then",
+            "theory",
+            "there",
+            "they",
+            "thing",
+            "this",
+            "thought",
+            "three",
+            "thrive",
+            "throw",
+            "thumb",
+            "thunder",
+            "ticket",
+            "tide",
+            "tiger",
+            "tilt",
+            "timber",
+            "time",
+            "tiny",
+            "tip",
+            "tired",
+            "tissue",
+            "title",
+            "toast",
+            "tobacco",
+            "today",
+            "toddler",
+            "toe",
+            "together",
+            "toilet",
+            "token",
+            "tomato",
+            "tomorrow",
+            "tone",
+            "tongue",
+            "tonight",
+            "tool",
+            "tooth",
+            "top",
+            "topic",
+            "topple",
+            "torch",
+            "tornado",
+            "tortoise",
+            "toss",
+            "total",
+            "tourist",
+            "toward",
+            "tower",
+            "town",
+            "toy",
+            "track",
+            "trade",
+            "traffic",
+            "tragic",
+            "train",
+            "transfer",
+            "trap",
+            "trash",
+            "travel",
+            "tray",
+            "treat",
+            "tree",
+            "trend",
+            "trial",
+            "tribe",
+            "trick",
+            "trigger",
+            "trim",
+            "trip",
+            "trophy",
+            "trouble",
+            "truck",
+            "true",
+            "truly",
+            "trumpet",
+            "trust",
+            "truth",
+            "try",
+            "tube",
+            "tuition",
+            "tumble",
+            "tuna",
+            "tunnel",
+            "turkey",
+            "turn",
+            "turtle",
+            "twelve",
+            "twenty",
+            "twice",
+            "twin",
+            "twist",
+            "two",
+            "type",
+            "typical",
+            "ugly",
+            "umbrella",
+            "unable",
+            "unaware",
+            "uncle",
+            "uncover",
+            "under",
+            "undo",
+            "unfair",
+            "unfold",
+            "unhappy",
+            "uniform",
+            "unique",
+            "unit",
+            "universe",
+            "unknown",
+            "unlock",
+            "until",
+            "unusual",
+            "unveil",
+            "update",
+            "upgrade",
+            "uphold",
+            "upon",
+            "upper",
+            "upset",
+            "urban",
+            "urge",
+            "usage",
+            "use",
+            "used",
+            "useful",
+            "useless",
+            "usual",
+            "utility",
+            "vacant",
+            "vacuum",
+            "vague",
+            "valid",
+            "valley",
+            "valve",
+            "van",
+            "vanish",
+            "vapor",
+            "various",
+            "vast",
+            "vault",
+            "vehicle",
+            "velvet",
+            "vendor",
+            "venture",
+            "venue",
+            "verb",
+            "verify",
+            "version",
+            "very",
+            "vessel",
+            "veteran",
+            "viable",
+            "vibrant",
+            "vicious",
+            "victory",
+            "video",
+            "view",
+            "village",
+            "vintage",
+            "violin",
+            "virtual",
+            "virus",
+            "visa",
+            "visit",
+            "visual",
+            "vital",
+            "vivid",
+            "vocal",
+            "voice",
+            "void",
+            "volcano",
+            "volume",
+            "vote",
+            "voyage",
+            "wage",
+            "wagon",
+            "wait",
+            "walk",
+            "wall",
+            "walnut",
+            "want",
+            "warfare",
+            "warm",
+            "warrior",
+            "wash",
+            "wasp",
+            "waste",
+            "water",
+            "wave",
+            "way",
+            "wealth",
+            "weapon",
+            "wear",
+            "weasel",
+            "weather",
+            "web",
+            "wedding",
+            "weekend",
+            "weird",
+            "welcome",
+            "west",
+            "wet",
+            "whale",
+            "what",
+            "wheat",
+            "wheel",
+            "when",
+            "where",
+            "whip",
+            "whisper",
+            "wide",
+            "width",
+            "wife",
+            "wild",
+            "will",
+            "win",
+            "window",
+            "wine",
+            "wing",
+            "wink",
+            "winner",
+            "winter",
+            "wire",
+            "wisdom",
+            "wise",
+            "wish",
+            "witness",
+            "wolf",
+            "woman",
+            "wonder",
+            "wood",
+            "wool",
+            "word",
+            "work",
+            "world",
+            "worry",
+            "worth",
+            "wrap",
+            "wreck",
+            "wrestle",
+            "wrist",
+            "write",
+            "wrong",
+            "yard",
+            "year",
+            "yellow",
+            "you",
+            "young",
+            "youth",
+            "zebra",
+            "zero",
+            "zone",
+            "zoo"
+        ];
     </script>
 </body>
 </html>
