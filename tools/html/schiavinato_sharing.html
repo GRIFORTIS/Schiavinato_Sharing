@@ -938,195 +938,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
     <div id="autocomplete-suggestions" style="display: none;"></div>
 
     <!-- ==========================================================================
-    SHA-256 LIBRARY (Embedded for offline use)
-    - Adapted from js-sha256 v0.9.0 (MIT License) https://github.com/emn178/js-sha256
-    - Provides a pure-JavaScript SHA-256 implementation that works in air-gapped sessions.
-    ========================================================================== -->
-    <script>
-        (function (root) {
-            'use strict';
-
-            const K = new Uint32Array([
-                0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-                0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-                0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-                0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-                0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-                0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-                0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-                0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-            ]);
-
-            const INITIAL_HASH = new Uint32Array([
-                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
-            ]);
-
-            function rightRotate(value, amount) {
-                return (value >>> amount) | (value << (32 - amount));
-            }
-
-            function utf8ToBytes(str) {
-                if (typeof TextEncoder !== 'undefined') {
-                    return new TextEncoder().encode(str);
-                }
-                const bytes = [];
-                for (let i = 0; i < str.length; i++) {
-                    let codePoint = str.charCodeAt(i);
-                    if (codePoint < 0x80) {
-                        bytes.push(codePoint);
-                    } else if (codePoint < 0x800) {
-                        bytes.push(0xc0 | (codePoint >> 6));
-                        bytes.push(0x80 | (codePoint & 0x3f));
-                    } else if (codePoint >= 0xd800 && codePoint <= 0xdbff) {
-                        i++;
-                        const next = str.charCodeAt(i);
-                        codePoint = ((codePoint - 0xd800) << 10) + (next - 0xdc00) + 0x10000;
-                        bytes.push(0xf0 | (codePoint >> 18));
-                        bytes.push(0x80 | ((codePoint >> 12) & 0x3f));
-                        bytes.push(0x80 | ((codePoint >> 6) & 0x3f));
-                        bytes.push(0x80 | (codePoint & 0x3f));
-                    } else {
-                        bytes.push(0xe0 | (codePoint >> 12));
-                        bytes.push(0x80 | ((codePoint >> 6) & 0x3f));
-                        bytes.push(0x80 | (codePoint & 0x3f));
-                    }
-                }
-                return new Uint8Array(bytes);
-            }
-
-            function normalizeInput(message) {
-                if (message instanceof Uint8Array) {
-                    return message;
-                }
-                if (typeof message === 'string') {
-                    return utf8ToBytes(message);
-                }
-                if (message instanceof ArrayBuffer) {
-                    return new Uint8Array(message);
-                }
-                if (ArrayBuffer.isView(message)) {
-                    return new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
-                }
-                throw new TypeError('sha256: unsupported message type');
-            }
-
-            function sha256DigestBytes(message) {
-                const bytes = normalizeInput(message);
-                const length = bytes.length;
-                const bitLength = length * 8;
-                const paddedLength = (length + 9 + 63) & ~63;
-                const padded = new Uint8Array(paddedLength);
-                padded.set(bytes);
-                padded[length] = 0x80;
-                const view = new DataView(padded.buffer);
-                view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000));
-                view.setUint32(paddedLength - 4, bitLength >>> 0);
-
-                const w = new Uint32Array(64);
-                let h0 = INITIAL_HASH[0];
-                let h1 = INITIAL_HASH[1];
-                let h2 = INITIAL_HASH[2];
-                let h3 = INITIAL_HASH[3];
-                let h4 = INITIAL_HASH[4];
-                let h5 = INITIAL_HASH[5];
-                let h6 = INITIAL_HASH[6];
-                let h7 = INITIAL_HASH[7];
-
-                for (let offset = 0; offset < paddedLength; offset += 64) {
-                    for (let i = 0; i < 16; i++) {
-                        w[i] = view.getUint32(offset + (i << 2));
-                    }
-                    for (let i = 16; i < 64; i++) {
-                        const s0 = (rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >>> 3)) >>> 0;
-                        const s1 = (rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >>> 10)) >>> 0;
-                        w[i] = (((((w[i - 16] + s0) >>> 0) + w[i - 7]) >>> 0) + s1) >>> 0;
-                    }
-
-                    let a = h0;
-                    let b = h1;
-                    let c = h2;
-                    let d = h3;
-                    let e = h4;
-                    let f = h5;
-                    let g = h6;
-                    let h = h7;
-
-                    for (let i = 0; i < 64; i++) {
-                        const S1 = (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) >>> 0;
-                        const ch = ((e & f) ^ (~e & g)) >>> 0;
-                        const temp1 = ((((((h + S1) >>> 0) + ch) >>> 0) + K[i]) >>> 0) + w[i];
-                        const S0 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) >>> 0;
-                        const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
-                        const temp2 = (S0 + maj) >>> 0;
-
-                        h = g;
-                        g = f;
-                        f = e;
-                        e = (d + temp1) >>> 0;
-                        d = c;
-                        c = b;
-                        b = a;
-                        a = (temp1 + temp2) >>> 0;
-                    }
-
-                    h0 = (h0 + a) >>> 0;
-                    h1 = (h1 + b) >>> 0;
-                    h2 = (h2 + c) >>> 0;
-                    h3 = (h3 + d) >>> 0;
-                    h4 = (h4 + e) >>> 0;
-                    h5 = (h5 + f) >>> 0;
-                    h6 = (h6 + g) >>> 0;
-                    h7 = (h7 + h) >>> 0;
-                }
-
-                const digest = new Uint8Array(32);
-                const digestView = new DataView(digest.buffer);
-                digestView.setUint32(0, h0);
-                digestView.setUint32(4, h1);
-                digestView.setUint32(8, h2);
-                digestView.setUint32(12, h3);
-                digestView.setUint32(16, h4);
-                digestView.setUint32(20, h5);
-                digestView.setUint32(24, h6);
-                digestView.setUint32(28, h7);
-                return digest;
-            }
-
-            function toHex(bytes) {
-                const HEX = '0123456789abcdef';
-                let out = '';
-                for (let i = 0; i < bytes.length; i++) {
-                    out += HEX[bytes[i] >>> 4] + HEX[bytes[i] & 0x0f];
-                }
-                return out;
-            }
-
-            function sha256(message) {
-                return toHex(sha256DigestBytes(message));
-            }
-
-            sha256.array = function (message) {
-                return Array.from(sha256DigestBytes(message));
-            };
-
-            sha256.digest = function (message) {
-                return sha256DigestBytes(message);
-            };
-
-            sha256.arrayBuffer = function (message) {
-                return sha256DigestBytes(message).buffer;
-            };
-
-            if (typeof module !== 'undefined' && module.exports) {
-                module.exports = sha256;
-            } else {
-                root.sha256 = sha256;
-            }
-        })(typeof self !== 'undefined' ? self : globalThis);
-    </script>
-
-    <!-- ==========================================================================
     UI BEHAVIOR SCRIPT
     - This script handles all UI interactions, dynamic content, and navigation.
     - It contains NO core cryptographic logic.
@@ -1625,33 +1436,32 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             }
         }
         
-        /**
-         * Returns any share rows whose Y values do not match their checksum entry.
-         * Optionally restricts the inspection to a specific row index.
-         * @param {Array<Object>} shares
-         * @param {number|null} targetRowIndex
-         * @returns {Array<{shareNumber: number, rowIndex: number}>}
+        /*
+         * findInvalidShareRows is intentionally disabled for now because it depends on crypto
+         * helpers that are not exposed in this UI scope. Keeping the original implementation
+         * here makes it easy to re-enable once the helper is properly wired.
+         *
+         * function findInvalidShareRows(shares, targetRowIndex = null) {
+         *     if (!Array.isArray(shares)) return [];
+         *     const invalid = [];
+         *     shares.forEach(share => {
+         *         if (!share || !Array.isArray(share.wordShares) || !Array.isArray(share.checksumShares)) return;
+         *         const rowCount = share.checksumShares.length;
+         *         for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+         *             if (targetRowIndex !== null && rowIndex !== targetRowIndex) continue;
+         *             const base = rowIndex * WORDS_PER_ROW;
+         *             const computedChecksum = modAdd(
+         *                 modAdd(share.wordShares[base], share.wordShares[base + 1]),
+         *                 share.wordShares[base + 2]
+         *             );
+         *             if (computedChecksum !== share.checksumShares[rowIndex]) {
+         *                 invalid.push({ shareNumber: share.shareNumber, rowIndex });
+         *             }
+         *         }
+         *     });
+         *     return invalid;
+         * }
          */
-        function findInvalidShareRows(shares, targetRowIndex = null) {
-            if (!Array.isArray(shares)) return [];
-            const invalid = [];
-            shares.forEach(share => {
-                if (!share || !Array.isArray(share.wordShares) || !Array.isArray(share.checksumShares)) return;
-                const rowCount = share.checksumShares.length;
-                for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-                    if (targetRowIndex !== null && rowIndex !== targetRowIndex) continue;
-                    const base = rowIndex * WORDS_PER_ROW;
-                    const computedChecksum = modAdd(
-                        modAdd(share.wordShares[base], share.wordShares[base + 1]),
-                        share.wordShares[base + 2]
-                    );
-                    if (computedChecksum !== share.checksumShares[rowIndex]) {
-                        invalid.push({ shareNumber: share.shareNumber, rowIndex });
-                    }
-                }
-            });
-            return invalid;
-        }
 
 
         disclaimerCheckbox.addEventListener('change', () => {
@@ -2567,23 +2377,38 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             // ==========================================================================
             // CORE GALOIS FIELD (GF(2053)) ARITHMETIC
             // ==========================================================================
+            /**
+             * Reduces an integer into GF(2053) by applying modulo with wraparound for negatives.
+             */
             function mod(value) {
                 const result = value % FIELD_PRIME;
                 return result < 0 ? result + FIELD_PRIME : result;
             }
 
+            /**
+             * Adds two field elements and returns the result modulo 2053.
+             */
             function modAdd(a, b) {
                 return mod(a + b);
             }
 
+            /**
+             * Subtracts the second field element from the first inside GF(2053).
+             */
             function modSub(a, b) {
                 return mod(a - b);
             }
 
+            /**
+             * Multiplies two field elements and reduces the product into GF(2053).
+             */
             function modMul(a, b) {
                 return mod(a * b);
             }
 
+            /**
+             * Computes the multiplicative inverse of a non-zero field element.
+             */
             function modInv(value) {
                 const val = mod(value);
                 if (val === 0) {
@@ -2610,6 +2435,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             // ==========================================================================
             // CRYPTOGRAPHICALLY SECURE RANDOMNESS
             // ==========================================================================
+            /**
+             * Returns a uniform random integer in [0, max] using window.crypto entropy.
+             */
             function getRandomIntInclusive(max) {
                 if (!window.crypto || !window.crypto.getRandomValues) {
                     throw new Error('Secure randomness (window.crypto.getRandomValues) is required.');
@@ -2629,6 +2457,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 return value % range;
             }
 
+            /**
+             * Draws a random element from GF(2053).
+             */
             function getRandomFieldElement() {
                 return getRandomIntInclusive(FIELD_PRIME - 1);
             }
@@ -2636,6 +2467,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             // ==========================================================================
             // POLYNOMIAL & INTERPOLATION LOGIC
             // ==========================================================================
+            /**
+             * Builds a random polynomial of the requested degree whose constant term is the secret.
+             */
             function randomPolynomial(secret, degree) {
                 const coefficients = [mod(secret)];
                 for (let i = 0; i < degree; i++) {
@@ -2644,6 +2478,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 return coefficients;
             }
 
+            /**
+             * Evaluates a polynomial at the provided x coordinate inside GF(2053).
+             */
             function evaluatePolynomial(coefficients, x) {
                 let result = 0;
                 const fieldX = mod(x);
@@ -2653,6 +2490,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 return result;
             }
 
+            /**
+             * Applies Lagrange interpolation at x=0 to recover the secret from share points.
+             */
             function lagrangeInterpolateAtZero(points) {
                 if (!Array.isArray(points) || points.length === 0) {
                     throw new Error('Interpolation requires at least one point.');
@@ -2678,6 +2518,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             // ==========================================================================
             // CHECKSUM & VALIDATION HELPERS
             // ==========================================================================
+            /**
+             * Computes the per-row checksum (sum of three words) for all word indices.
+             */
             function computeRowChecks(wordIndices) {
                 const rowCount = wordIndices.length / WORDS_PER_ROW;
                 const checks = [];
@@ -2689,10 +2532,16 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 return checks;
             }
             
+            /**
+             * Calculates the master checksum by summing all word indices mod 2053.
+             */
             function computeMasterCheck(wordIndices) {
                 return wordIndices.reduce((acc, value) => modAdd(acc, value), 0);
             }
             
+            /**
+             * Normalizes whitespace/case on a mnemonic and ensures it is non-empty.
+             */
             function sanitizeMnemonic(mnemonic) {
                 if (typeof mnemonic !== 'string') {
                     throw new Error('Mnemonic must be a string.');
@@ -2704,12 +2553,18 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 return normalized;
             }
 
+            /**
+             * Ensures the mnemonic word count is one of the supported lengths.
+             */
             function ensureSupportedWordCount(wordCount) {
                 if (wordCount !== 12 && wordCount !== 24) {
                     throw new Error('This tool currently supports only 12- or 24-word mnemonics.');
                 }
             }
 
+            /**
+             * Validates that a share value is an integer inside GF(2053) and returns it.
+             */
             function normalizeShareValue(value, label) {
                 if (!Number.isInteger(value)) {
                     throw new Error(`${label} must be an integer inside GF(2053).`);
@@ -2720,6 +2575,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 return value;
             }
 
+            /**
+             * Performs structural validation on each share before attempting recovery.
+             */
             function validateSharesForRecovery(shares, wordCount) {
                 const rowCount = wordCount / WORDS_PER_ROW;
                 shares.forEach((share, index) => {
@@ -2738,6 +2596,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 });
             }
 
+            /**
+             * Ensures that every share provided has a unique X coordinate.
+             */
             function ensureShareNumbersDistinct(shares) {
                 const seen = new Set();
                 for (const share of shares) {
@@ -2751,10 +2612,16 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             // ==========================================================================
             // BIP39 CHECKSUM VALIDATION
             // ==========================================================================
+            /**
+             * Converts a Uint8Array into a continuous string of bits.
+             */
             function bytesToBinary(bytes) {
                 return Array.from(bytes).map((b) => b.toString(2).padStart(8, '0')).join('');
             }
 
+            /**
+             * Hashes the provided data using the embedded SHA-256 implementation.
+             */
             async function computeSha256(data) {
                 if (typeof sha256 !== 'function' || typeof sha256.arrayBuffer !== 'function') {
                     throw new Error('Embedded SHA-256 implementation is not available.');
@@ -2762,6 +2629,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 return new Uint8Array(sha256.arrayBuffer(data));
             }
 
+            /**
+             * Validates that a mnemonic string is BIP39-compliant, including checksum.
+             */
             async function validateBIP39Mnemonic(mnemonic, wordlist) {
                 const words = mnemonic.trim().split(/\s+/);
                 const wordCount = words.length;
@@ -2797,6 +2667,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             // ==========================================================================
             // PUBLIC API METHODS
             // ==========================================================================
+            /**
+             * Splits a BIP39 mnemonic into n Shamir shares with threshold k.
+             */
             async function splitBip39(mnemonic, k, n, wordlist) {
                 if (!Number.isInteger(k) || !Number.isInteger(n)) {
                     throw new Error('Threshold (k) and total shares (n) must be integers.');
@@ -5034,6 +4907,195 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             "zone",
             "zoo"
         ];
+    </script>
+
+    <!-- ==========================================================================
+    SHA-256 LIBRARY (Embedded for offline use)
+    - Adapted from js-sha256 v0.9.0 (MIT License) https://github.com/emn178/js-sha256
+    - Provides a pure-JavaScript SHA-256 implementation that works in air-gapped sessions.
+    ========================================================================== -->
+    <script>
+        (function (root) {
+            'use strict';
+
+            const K = new Uint32Array([
+                0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+                0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+                0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+                0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+                0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+                0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+                0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+                0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+            ]);
+
+            const INITIAL_HASH = new Uint32Array([
+                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+            ]);
+
+            function rightRotate(value, amount) {
+                return (value >>> amount) | (value << (32 - amount));
+            }
+
+            function utf8ToBytes(str) {
+                if (typeof TextEncoder !== 'undefined') {
+                    return new TextEncoder().encode(str);
+                }
+                const bytes = [];
+                for (let i = 0; i < str.length; i++) {
+                    let codePoint = str.charCodeAt(i);
+                    if (codePoint < 0x80) {
+                        bytes.push(codePoint);
+                    } else if (codePoint < 0x800) {
+                        bytes.push(0xc0 | (codePoint >> 6));
+                        bytes.push(0x80 | (codePoint & 0x3f));
+                    } else if (codePoint >= 0xd800 && codePoint <= 0xdbff) {
+                        i++;
+                        const next = str.charCodeAt(i);
+                        codePoint = ((codePoint - 0xd800) << 10) + (next - 0xdc00) + 0x10000;
+                        bytes.push(0xf0 | (codePoint >> 18));
+                        bytes.push(0x80 | ((codePoint >> 12) & 0x3f));
+                        bytes.push(0x80 | ((codePoint >> 6) & 0x3f));
+                        bytes.push(0x80 | (codePoint & 0x3f));
+                    } else {
+                        bytes.push(0xe0 | (codePoint >> 12));
+                        bytes.push(0x80 | ((codePoint >> 6) & 0x3f));
+                        bytes.push(0x80 | (codePoint & 0x3f));
+                    }
+                }
+                return new Uint8Array(bytes);
+            }
+
+            function normalizeInput(message) {
+                if (message instanceof Uint8Array) {
+                    return message;
+                }
+                if (typeof message === 'string') {
+                    return utf8ToBytes(message);
+                }
+                if (message instanceof ArrayBuffer) {
+                    return new Uint8Array(message);
+                }
+                if (ArrayBuffer.isView(message)) {
+                    return new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
+                }
+                throw new TypeError('sha256: unsupported message type');
+            }
+
+            function sha256DigestBytes(message) {
+                const bytes = normalizeInput(message);
+                const length = bytes.length;
+                const bitLength = length * 8;
+                const paddedLength = (length + 9 + 63) & ~63;
+                const padded = new Uint8Array(paddedLength);
+                padded.set(bytes);
+                padded[length] = 0x80;
+                const view = new DataView(padded.buffer);
+                view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000));
+                view.setUint32(paddedLength - 4, bitLength >>> 0);
+
+                const w = new Uint32Array(64);
+                let h0 = INITIAL_HASH[0];
+                let h1 = INITIAL_HASH[1];
+                let h2 = INITIAL_HASH[2];
+                let h3 = INITIAL_HASH[3];
+                let h4 = INITIAL_HASH[4];
+                let h5 = INITIAL_HASH[5];
+                let h6 = INITIAL_HASH[6];
+                let h7 = INITIAL_HASH[7];
+
+                for (let offset = 0; offset < paddedLength; offset += 64) {
+                    for (let i = 0; i < 16; i++) {
+                        w[i] = view.getUint32(offset + (i << 2));
+                    }
+                    for (let i = 16; i < 64; i++) {
+                        const s0 = (rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >>> 3)) >>> 0;
+                        const s1 = (rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >>> 10)) >>> 0;
+                        w[i] = (((((w[i - 16] + s0) >>> 0) + w[i - 7]) >>> 0) + s1) >>> 0;
+                    }
+
+                    let a = h0;
+                    let b = h1;
+                    let c = h2;
+                    let d = h3;
+                    let e = h4;
+                    let f = h5;
+                    let g = h6;
+                    let h = h7;
+
+                    for (let i = 0; i < 64; i++) {
+                        const S1 = (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) >>> 0;
+                        const ch = ((e & f) ^ (~e & g)) >>> 0;
+                        const temp1 = ((((((h + S1) >>> 0) + ch) >>> 0) + K[i]) >>> 0) + w[i];
+                        const S0 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) >>> 0;
+                        const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+                        const temp2 = (S0 + maj) >>> 0;
+
+                        h = g;
+                        g = f;
+                        f = e;
+                        e = (d + temp1) >>> 0;
+                        d = c;
+                        c = b;
+                        b = a;
+                        a = (temp1 + temp2) >>> 0;
+                    }
+
+                    h0 = (h0 + a) >>> 0;
+                    h1 = (h1 + b) >>> 0;
+                    h2 = (h2 + c) >>> 0;
+                    h3 = (h3 + d) >>> 0;
+                    h4 = (h4 + e) >>> 0;
+                    h5 = (h5 + f) >>> 0;
+                    h6 = (h6 + g) >>> 0;
+                    h7 = (h7 + h) >>> 0;
+                }
+
+                const digest = new Uint8Array(32);
+                const digestView = new DataView(digest.buffer);
+                digestView.setUint32(0, h0);
+                digestView.setUint32(4, h1);
+                digestView.setUint32(8, h2);
+                digestView.setUint32(12, h3);
+                digestView.setUint32(16, h4);
+                digestView.setUint32(20, h5);
+                digestView.setUint32(24, h6);
+                digestView.setUint32(28, h7);
+                return digest;
+            }
+
+            function toHex(bytes) {
+                const HEX = '0123456789abcdef';
+                let out = '';
+                for (let i = 0; i < bytes.length; i++) {
+                    out += HEX[bytes[i] >>> 4] + HEX[bytes[i] & 0x0f];
+                }
+                return out;
+            }
+
+            function sha256(message) {
+                return toHex(sha256DigestBytes(message));
+            }
+
+            sha256.array = function (message) {
+                return Array.from(sha256DigestBytes(message));
+            };
+
+            sha256.digest = function (message) {
+                return sha256DigestBytes(message);
+            };
+
+            sha256.arrayBuffer = function (message) {
+                return sha256DigestBytes(message).buffer;
+            };
+
+            if (typeof module !== 'undefined' && module.exports) {
+                module.exports = sha256;
+            } else {
+                root.sha256 = sha256;
+            }
+        })(typeof self !== 'undefined' ? self : globalThis);
     </script>
 </body>
 </html>
