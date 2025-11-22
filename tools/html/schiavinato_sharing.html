@@ -1151,6 +1151,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             }
         }
         
+        const WORDS_PER_ROW = 3;
+        const FIELD_PRIME = 2053;
+        
         let createFlowWordCache = Array(24).fill('');
         let createWordCount = 24;
 
@@ -1164,6 +1167,108 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         let activeSuggestionIndex = -1;
         let allowMouseHover = false;
         let currentAutocompleteInput = null;
+
+        /**
+         * Builds a deterministic field id for recovery inputs.
+         */
+        function buildRecoveryFieldId(shareIndex, rowIndex, slot) {
+            return `recover-share-${shareIndex}-row-${rowIndex}-${slot}`;
+        }
+
+        /**
+         * Returns a human-readable label for a recovery input.
+         */
+        function buildRecoveryFieldLabel(shareIndex, rowIndex, slot) {
+            const rowNumber = rowIndex + 1;
+            if (slot === 'checksum') {
+                return `Share ${shareIndex} · Row ${rowNumber} checksum`;
+            }
+            const slotParts = slot.split('-');
+            const wordNumber = parseInt(slotParts[1], 10) + 1;
+            return `Share ${shareIndex} · Row ${rowNumber} word ${wordNumber}`;
+        }
+
+        /**
+         * Applies a consistent invalid state to an input.
+         */
+        function markInputInvalid(input, message, { rowHighlight = false } = {}) {
+            if (!input) return;
+            input.classList.add('invalid');
+            if (rowHighlight) {
+                input.setAttribute('data-row-highlight', 'true');
+            }
+            if (message) {
+                input.dataset.errorMessage = message;
+                input.title = message;
+            }
+        }
+
+        /**
+         * Clears any invalid/row highlight state from an input.
+         */
+        function clearInputErrorState(input) {
+            if (!input) return;
+            input.classList.remove('invalid');
+            input.removeAttribute('data-error-message');
+            input.removeAttribute('title');
+            input.removeAttribute('data-row-highlight');
+        }
+
+        /**
+         * Parses a recovery field entry into a GF(2053) value.
+         * Accepts: BIP39 word, raw number, or "word +/- number" combos (digits at the end).
+         */
+        function parseShareValue(raw, { allowNumeric = true } = {}) {
+            if (raw === undefined || raw === null) {
+                return { ok: false, reason: 'empty' };
+            }
+            const trimmed = String(raw).trim();
+            if (trimmed === '') {
+                return { ok: false, reason: 'empty' };
+            }
+            const numericMatch = trimmed.match(/(\d+)\s*$/);
+            if (numericMatch) {
+                if (!allowNumeric) {
+                    return { ok: false, reason: 'numeric-not-allowed' };
+                }
+                const numeric = parseInt(numericMatch[1], 10);
+                if (Number.isNaN(numeric)) {
+                    return { ok: false, reason: 'nan' };
+                }
+                if (numeric >= 0 && numeric < FIELD_PRIME) {
+                    return { ok: true, value: numeric, source: 'number' };
+                }
+                return { ok: false, reason: 'range', value: numeric };
+            }
+            const normalizedWord = trimmed.toLowerCase();
+            const wordIndex = BIP39_WORDLIST.indexOf(normalizedWord);
+            if (wordIndex !== -1) {
+                return { ok: true, value: wordIndex, source: 'word' };
+            }
+            return { ok: false, reason: 'unknown' };
+        }
+
+        /**
+         * Converts a parse failure into a short, human-friendly message.
+         */
+        function formatParseError(fieldLabel, parseResult) {
+            const label = fieldLabel || 'This field';
+            if (!parseResult || parseResult.ok) {
+                return `${label} contains an invalid value.`;
+            }
+            switch (parseResult.reason) {
+                case 'empty':
+                    return `${label} is required.`;
+                case 'range':
+                    return `${label} must be between 0 and ${FIELD_PRIME - 1}.`;
+                case 'numeric-not-allowed':
+                    return `${label} must be a BIP39 word.`;
+                case 'unknown':
+                    return `${label} must be a BIP39 word or a number (formats like "olive - 1234" are accepted).`;
+                default:
+                    return `${label} contains an invalid value.`;
+            }
+        }
 
         // ==========================================================================
         // SECTION 2: UI - DOM ELEMENT REFERENCES
@@ -1264,8 +1369,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 
                 // --- TEMPORARY DEBUG START ---
                 // To revert, uncomment the ORIGINAL lines and remove the TEMPORARY DEBUG lines.
-                // const { shares } = await splitBip39(mnemonic, k, n, BIP39_WORDLIST); // ORIGINAL
-                const { shares, debugCoefficients } = await splitBip39(mnemonic, k, n, BIP39_WORDLIST); // TEMPORARY DEBUG
+                // const { shares } = await SchiavinatoSharing.splitBip39(mnemonic, k, n, BIP39_WORDLIST); // ORIGINAL
+                const { shares, debugCoefficients } = await SchiavinatoSharing.splitBip39(mnemonic, k, n, BIP39_WORDLIST); // TEMPORARY DEBUG
                 
                 // 3. Populate the next page and display it
                 // displayShares(shares, { identifier, date, scheme, wordCount: createWordCount }, debugCoefficients); // ORIGINAL
@@ -1283,86 +1388,197 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         btnBackToRecover1.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
 
         btnRecoverWallet.addEventListener('click', async () => {
-            clearAllRecoveryHighlights(); // Clear previous errors first
-            try {
-                // 1. Gather all inputs from the recovery form
-                const k = parseInt(document.querySelector('input[name="recover-k"]:checked').value, 10);
-                
-                const shares = [];
-                const shareContainers = document.querySelectorAll('#recover-shares-container .share-input-container');
+            /**
+             * Recovery validation overview (human-first):
+             * 1. Only ask for the minimum number of shares (`k`), but require each share form to be fully populated.
+             * 2. Validate formats locally (words, numbers, or mixed "olive - 1234" styles) and enforce GF(2053) bounds.
+             * 3. Reject duplicate share numbers before attempting any cryptographic work.
+             * 4. Keep field-level highlights in place until the user fixes the corresponding input.
+             */
+            const k = parseInt(document.querySelector('input[name="recover-k"]:checked').value, 10);
+            const shares = [];
+            const shareContainers = document.querySelectorAll('#recover-shares-container .share-input-container');
 
-                if (shareContainers.length !== k) {
-                    throw new Error("The number of input forms does not match the selected threshold (K).");
+            if (shareContainers.length !== k) {
+                await showErrorModal('Input Error', "The number of input forms does not match the selected threshold (K).");
+                return;
+            }
+            
+            const uiErrors = new Set();
+            const seenShareNumbers = new Map(); // shareNumber -> shareIndex
+            let parsingError = false;
+
+            for (let i = 0; i < k; i++) {
+                const container = shareContainers[i];
+                const shareIndex = i + 1;
+                container.dataset.shareIndex = String(shareIndex);
+
+                const shareNumberInput = container.querySelector(`#recover-x-${shareIndex}`);
+                const masterShareInput = container.querySelector(`#recover-master-${shareIndex}`);
+
+                if (!shareNumberInput || !masterShareInput) {
+                    uiErrors.add('A share input block is missing required fields.');
+                    parsingError = true;
+                    continue;
                 }
 
-                for (let i = 0; i < k; i++) {
-                    const container = shareContainers[i];
-                    const shareNumberInput = container.querySelector(`[id^="recover-x-"]`);
-                    const masterShareInput = container.querySelector(`[id^="recover-master-"]`);
-                    const shareNumber = parseInt(shareNumberInput.value.trim(), 10);
-                    
-                    // Parse "word - number" format for master share
-                    const masterShare = resolveShareValue(masterShareInput.value);
+                shareNumberInput.dataset.fieldLabel = `Share ${shareIndex} number`;
+                shareNumberInput.dataset.allowNumeric = 'true';
+                masterShareInput.dataset.fieldLabel = `Share ${shareIndex} master verification`;
+                masterShareInput.dataset.allowNumeric = 'true';
 
-                    if (isNaN(shareNumber)) {
-                        throw new Error(`Share #${i + 1} is missing a share number (X).`);
+                const shareNumberRaw = shareNumberInput.value.trim();
+                const shareNumber = Number(shareNumberRaw);
+                if (!Number.isInteger(shareNumber) || shareNumber <= 0 || shareNumber >= FIELD_PRIME) {
+                    const message = `Share numbers must be integers between 1 and ${FIELD_PRIME - 1}.`;
+                    markInputInvalid(shareNumberInput, message);
+                    uiErrors.add(message);
+                    parsingError = true;
+                    continue;
+                }
+                if (seenShareNumbers.has(shareNumber)) {
+                    const existingIndex = seenShareNumbers.get(shareNumber);
+                    const existingInput = document.querySelector(`#recover-x-${existingIndex}`);
+                    const duplicateMessage = `Share number ${shareNumber} is duplicated. Each share must have a unique X value.`;
+                    markInputInvalid(shareNumberInput, duplicateMessage);
+                    if (existingInput) {
+                        markInputInvalid(existingInput, duplicateMessage);
                     }
-                    if (isNaN(masterShare)) {
-                        throw new Error(`Share #${i + 1} is missing a master verification share value.`);
-                    }
+                    uiErrors.add('Duplicate share numbers detected. Resolve before continuing.');
+                    parsingError = true;
+                    continue;
+                }
+                seenShareNumbers.set(shareNumber, shareIndex);
 
-                    const wordInputs = container.querySelectorAll('.seed-word-row input');
-                    const values = Array.from(wordInputs).map(input => {
-                        // The input can be a word "abandon" or a word-number pair "abandon - 0000" or just a number "0"
-                        const val = resolveShareValue(input.value);
-                        if (isNaN(val)) throw new Error(`Invalid or missing numeric value in Share #${shareNumber}. All share values (Y) must be numbers, or word-number pairs.`);
-                        return val;
-                    });
-                    
-                    const wordsPerChecksum = 3;
-                    const numRows = recoverWordCount / wordsPerChecksum;
-                    const share = {
-                        shareNumber: shareNumber,
-                        wordShares: [],
-                        checksumShares: [],
-                        masterVerificationShare: masterShare
-                    };
+                const masterParse = parseShareValue(masterShareInput.value, { allowNumeric: true });
+                if (!masterParse.ok) {
+                    markInputInvalid(masterShareInput, formatParseError(masterShareInput.dataset.fieldLabel, masterParse));
+                    uiErrors.add('Fix the highlighted master verification fields.');
+                    parsingError = true;
+                    continue;
+                }
 
-                    let valueIndex = 0;
-                    for(let r = 0; r < numRows; r++) {
-                        for(let w = 0; w < wordsPerChecksum; w++) {
-                            share.wordShares.push(values[valueIndex++]);
+                const wordsPerChecksum = WORDS_PER_ROW;
+                const numRows = recoverWordCount / wordsPerChecksum;
+                const share = {
+                    shareNumber,
+                    shareIndex,
+                    wordShares: [],
+                    checksumShares: [],
+                    masterVerificationShare: masterParse.value
+                };
+
+                let rowHadError = false;
+                for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
+                    for (let wordSlot = 0; wordSlot < wordsPerChecksum; wordSlot++) {
+                        const input = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="word-${wordSlot}"]`);
+                        if (!input) continue;
+                        const parseResult = parseShareValue(input.value, { allowNumeric: true });
+                        if (!parseResult.ok) {
+                            const message = formatParseError(input.dataset.fieldLabel, parseResult);
+                            markInputInvalid(input, message, { rowHighlight: true });
+                            uiErrors.add('Fix the highlighted share rows before continuing.');
+                            rowHadError = true;
+                        } else {
+                            clearInputErrorState(input);
+                            share.wordShares.push(parseResult.value);
                         }
-                        share.checksumShares.push(values[valueIndex++]);
                     }
-
-                    shares.push(share);
+                    const checksumInput = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="checksum"]`);
+                    if (checksumInput) {
+                        const checksumParse = parseShareValue(checksumInput.value, { allowNumeric: true });
+                        if (!checksumParse.ok) {
+                            const message = formatParseError(checksumInput.dataset.fieldLabel, checksumParse);
+                            markInputInvalid(checksumInput, message, { rowHighlight: true });
+                            uiErrors.add('Fix the highlighted share rows before continuing.');
+                            rowHadError = true;
+                        } else {
+                            clearInputErrorState(checksumInput);
+                            share.checksumShares.push(checksumParse.value);
+                        }
+                    }
                 }
 
-                // 2. Call the core recovery function
-                const recoveredMnemonic = await recoverBip39(shares, recoverWordCount, BIP39_WORDLIST);
+                if (rowHadError) {
+                    parsingError = true;
+                    continue;
+                }
 
-                // 3. Display the result on the next page
-                displayRecoveredMnemonic(recoveredMnemonic);
-                showPage('recover2', 'Recover Wallet');
+                shares.push(share);
+            }
+
+            if (uiErrors.size > 0) {
+                await showErrorModal('Input Error', Array.from(uiErrors).join('\n'));
+                return;
+            }
+
+            if (parsingError || shares.length !== k) {
+                await showErrorModal('Input Error', 'Please fix the highlighted fields before attempting recovery again.');
+                return;
+            }
+
+            // 2. CALL UNIFIED RECOVERY & VALIDATION
+            try {
+                const report = await SchiavinatoSharing.recoverAndValidate(shares, recoverWordCount, BIP39_WORDLIST);
+                
+                // 3. DISPLAY RESULTS
+                await displayValidationResults(report, shares);
 
             } catch (error) {
-                if (error instanceof ChecksumError) {
-                    const invalidRows = findInvalidShareRows(shares, error.row);
-                    const messageDetails = invalidRows.length
-                        ? `Share #${invalidRows[0].shareNumber}, row #${invalidRows[0].rowIndex + 1}`
-                        : `Row #${(error.row ?? 0) + 1}`;
-                    await showErrorModal('Checksum Error', `Validate the entry. ${messageDetails} has a calculation error.`);
-                    if (invalidRows.length) {
-                        invalidRows.forEach(({ shareNumber, rowIndex }) => highlightErrorRow(rowIndex, shareNumber));
-                    } else {
-                        highlightErrorRow(error.row);
-                    }
-                } else {
-                    await showErrorModal('Recovery Failed', error.message);
-                }
+                // Catches errors from the UI gathering phase (e.g., parsing)
+                await showErrorModal('Input Error', error.message);
             }
         });
+
+        /**
+         * Processes the report from the recovery function and updates the UI accordingly.
+         * It handles success, partial success (BIP39 checksum fail), and various failures.
+         * @param {Object} report - The report object from `recoverAndValidate`.
+         * @param {Array<Object>} shares - The array of share objects from the UI, needed for context.
+         */
+        async function displayValidationResults(report, shares) {
+            const { recoveredMnemonic, errors, sharesWithInvalidChecksums } = report;
+            const hasSchiavinatoErrors = errors.row.length > 0 || errors.master;
+            const hasOnlyBip39Error = !hasSchiavinatoErrors && !errors.generic && errors.bip39;
+
+            if (hasSchiavinatoErrors || errors.generic) {
+                // --- FAILURE CASE: Schiavinato or Generic Errors ---
+                let errorMessage = errors.generic ? `${errors.generic}` : 'Validation failed. Please check the highlighted fields.';
+                
+                if (errors.row.length > 0) {
+                    const failingRows = errors.row.map(r => `Row #${r + 1}`).join(', ');
+                    errorMessage += ` Mismatch found in: ${failingRows}.`;
+                    // This highlights the row across ALL shares, which is the correct behavior
+                    // for post-recovery errors where the faulty share is unknown.
+                    errors.row.forEach(rowIndex => highlightErrorRow(rowIndex));
+                }
+                if (errors.master) {
+                    errorMessage += ' Master verification failed.';
+                    highlightMasterError(sharesWithInvalidChecksums, shares);
+                }
+                
+                await showErrorModal('Recovery Failed', errorMessage);
+
+            } else if (hasOnlyBip39Error) {
+                // --- SPECIAL CASE: Schiavinato valid, but BIP39 checksum is wrong ---
+                const confirmed = await showConfirmationModal(
+                    'BIP39 Checksum Invalid',
+                    'The shares are mathematically correct, but the resulting mnemonic is NOT a valid BIP39 seed phrase. This can happen with older versions of this tool or manual errors. You can view the invalid phrase, but DO NOT use it as a real wallet.'
+                );
+                if (confirmed) {
+                    displayRecoveredMnemonic(recoveredMnemonic, true); // Pass true for warning
+                    showPage('recover2', 'Recover Wallet');
+                }
+            } else if (recoveredMnemonic) {
+                // --- SUCCESS CASE ---
+                displayRecoveredMnemonic(recoveredMnemonic, false); // Pass false for no warning
+                showPage('recover2', 'Recover Wallet');
+            } else {
+                // --- UNEXPECTED CASE ---
+                await showErrorModal('Unknown Error', 'An unexpected error occurred during recovery.');
+            }
+        }
+        
         /**
          * Returns any share rows whose Y values do not match their checksum entry.
          * Optionally restricts the inspection to a specific row index.
@@ -1469,6 +1685,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
             const container = document.createElement('div');
             container.className = 'share-input-container';
+            container.id = `share-container-${shareIndex}`;
+            container.dataset.shareIndex = String(shareIndex);
 
             const mainHeader = document.createElement('h3');
             mainHeader.textContent = `Share Input #${shareIndex}`;
@@ -1490,6 +1708,10 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             inputX.className = 'mono';
             inputX.placeholder = 'E.g., 3';
             inputX.value = shareCache.shareNumber;
+            inputX.dataset.allowNumeric = 'true';
+            inputX.dataset.fieldLabel = `Share ${shareIndex} number`;
+            inputX.addEventListener('blur', () => validateInputOnBlur(inputX));
+            inputX.addEventListener('input', () => clearInputErrorState(inputX));
             shareNumberGroup.appendChild(labelX);
             shareNumberGroup.appendChild(inputX);
             twoColGrid.appendChild(shareNumberGroup);
@@ -1505,9 +1727,10 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             inputMaster.className = 'mono';
             inputMaster.placeholder = 'E.g., abandon - 0001';
             inputMaster.value = shareCache.masterVerificationShare || '';
+            inputMaster.dataset.allowNumeric = 'true';
+            inputMaster.dataset.fieldLabel = `Share ${shareIndex} master verification`;
             attachAutocompleteListeners(inputMaster);
             masterShareGroup.appendChild(labelMaster);
-            inputMaster.dataset.allowNumeric = 'true';
             masterShareGroup.appendChild(inputMaster);
             twoColGrid.appendChild(masterShareGroup);
             
@@ -1523,6 +1746,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             const numChecksums = totalWords / wordsPerChecksum;
 
             let wordCounter = 0;
+            let inputIndex = 0;
             for (let i = 1; i <= numChecksums; i++) {
                 for (let j = 0; j < wordsPerChecksum; j++) {
                     const row = document.createElement('div');
@@ -1533,13 +1757,19 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     const input = document.createElement('input');
                     input.type = 'text';
                     input.className = 'mono';
-                    input.value = shareCache.words[wordCounter] || '';
+                    input.id = buildRecoveryFieldId(shareIndex, i - 1, `word-${j}`);
+                    input.dataset.shareIndex = String(shareIndex);
+                    input.dataset.rowIndex = String(i - 1);
+                    input.dataset.slot = `word-${j}`;
                     input.dataset.allowNumeric = 'true';
+                    input.dataset.fieldLabel = buildRecoveryFieldLabel(shareIndex, i - 1, `word-${j}`);
+                    input.value = shareCache.words[wordCounter] || '';
                     attachAutocompleteListeners(input);
                     row.appendChild(label);
                     row.appendChild(input);
                     seedGrid.appendChild(row);
                     wordCounter++;
+                    inputIndex++;
                 }
                 const row = document.createElement('div');
                 row.className = 'seed-word-row';
@@ -1548,13 +1778,19 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.className = 'mono';
-                input.value = shareCache.words[wordCounter] || '';
+                input.id = buildRecoveryFieldId(shareIndex, i - 1, 'checksum');
+                input.dataset.shareIndex = String(shareIndex);
+                input.dataset.rowIndex = String(i - 1);
+                input.dataset.slot = 'checksum';
                 input.dataset.allowNumeric = 'true';
+                input.dataset.fieldLabel = buildRecoveryFieldLabel(shareIndex, i - 1, 'checksum');
+                input.value = shareCache.words[wordCounter] || '';
                 attachAutocompleteListeners(input);
                 row.appendChild(label);
                 row.appendChild(input);
                 seedGrid.appendChild(row);
                 wordCounter++;
+                inputIndex++;
             }
 
             container.appendChild(seedGrid);
@@ -1611,13 +1847,16 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             input.addEventListener('input', () => {
                 currentAutocompleteInput = input;
                 showAutocomplete(input);
+                // Provide immediate, lenient feedback as the user types.
+                validateInputAsUserTypes(input);
             });
             input.addEventListener('keydown', handleAutocompleteKeydown);
             attachValidationListener(input); // Also attach the blur validation
         }
 
         /**
-         * Attaches only the blur validation listener to an input field (e.g., for checksums).
+         * Attaches only the blur validation listener to an input field.
+         * This uses a stricter validation than the live input validation.
          * @param {HTMLInputElement} input - The input element.
          */
         function attachValidationListener(input) {
@@ -1625,10 +1864,54 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 setTimeout(() => {
                     if (!autocompleteContainer.contains(document.activeElement)) {
                         hideAutocomplete();
-                        validateInput(input);
+                        validateInputOnBlur(input); // Use strict validation on blur
                     }
                 }, 150);
             });
+        }
+
+        /**
+         * Validates input leniently as the user types. An input is only invalid
+         * if it's not a valid prefix of any word in the list. This prevents
+         * showing an error while the user is still typing a valid word.
+         * @param {HTMLInputElement} input
+         */
+        function validateInputAsUserTypes(input) {
+            const value = input.value.trim();
+            const normalizedValue = value.toLowerCase();
+
+            if (normalizedValue === '') {
+                input.classList.remove('invalid');
+                return;
+            }
+
+            const allowNumeric = input.dataset.allowNumeric === 'true';
+            const isPrefix = BIP39_WORDLIST.some(word => word.startsWith(normalizedValue));
+            const isValid = allowNumeric ? true : isPrefix;
+            
+            if (isValid) {
+                input.classList.remove('invalid');
+            } else {
+                input.classList.add('invalid');
+            }
+        }
+
+        /**
+         * Validates input strictly when the user leaves the field (on blur).
+         * The input must be a full, valid BIP39 word or a parsable share value.
+         * Prefixes are not considered valid here.
+         * @param {HTMLInputElement} input
+         */
+        function validateInputOnBlur(input) {
+            const allowNumeric = input.dataset.allowNumeric === 'true';
+            const parseResult = parseShareValue(input.value, { allowNumeric });
+            if (parseResult.ok || (input.value || '').trim() === '') {
+                clearInputErrorState(input);
+                return parseResult.ok ? parseResult.value : null;
+            }
+            const label = input.dataset.fieldLabel || 'This field';
+            markInputInvalid(input, formatParseError(label, parseResult), { rowHighlight: input.hasAttribute('data-row-highlight') });
+            return null;
         }
 
         /**
@@ -1770,77 +2053,44 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         }
         
         /**
-         * Attempts to extract the trailing numeric portion from an input value.
-         * Supports free-form text such as "word - 0001" or "Master Share: 1234".
-         * @param {string} value
-         * @returns {number} Parsed integer or NaN if none found.
-         */
-        function extractShareValue(value) {
-            if (!value) return NaN;
-            const match = value.trim().match(/(\d+)\s*$/);
-            return match ? parseInt(match[1], 10) : NaN;
-        }
-
-        /**
-         * Resolves a share input into a numeric value.
-         * Accepts trailing-number formats or standalone BIP39 words.
-         * @param {string} value
-         * @returns {number} Parsed integer or NaN if it cannot be resolved.
-         */
-        function resolveShareValue(value) {
-            if (!value) return NaN;
-            const trimmed = value.trim();
-            const numeric = extractShareValue(trimmed);
-            if (Number.isInteger(numeric) && numeric >= 0 && numeric < FIELD_PRIME) {
-                return numeric;
-            }
-            const normalizedWord = trimmed.toLowerCase();
-            const wordIndex = BIP39_WORDLIST.indexOf(normalizedWord);
-            if (wordIndex !== -1) {
-                return wordIndex;
-            }
-            return NaN;
-        }
-
-        /**
          * Validates an input's value on blur.
          * A valid input can be a BIP39 word, a number in the field, or a "word - number" pair.
          * @param {HTMLInputElement} input - The input element to validate.
          */
         function validateInput(input) {
-            const value = input.value.trim();
-            if (!value) {
-                input.classList.remove('invalid');
-                return; // Still valid if empty
+            if ((input.value || '').trim() === '') {
+                clearInputErrorState(input);
+                return null;
             }
-
-            // A valid input can be:
-            // 1. A word from the BIP39 wordlist.
-            // 2. (Optionally) A string with a numeric value in our field.
-            const normalizedWord = value.toLowerCase();
-            const isWordInList = BIP39_WORDLIST.includes(normalizedWord);
-            const allowNumeric = input.dataset.allowNumeric === 'true';
-            let isValid = isWordInList;
-
-            if (allowNumeric) {
-                const resolvedValue = resolveShareValue(value);
-                const isParsableToValidNumber = Number.isInteger(resolvedValue) && resolvedValue >= 0 && resolvedValue < FIELD_PRIME;
-                isValid = isValid || isParsableToValidNumber;
-            }
-            
-            input.classList.toggle('invalid', !isValid);
+            return validateInputOnBlur(input);
         }
 
         /**
          * Clears any prior checksum-row highlights applied during recovery attempts.
-         * Only inputs explicitly marked as row highlights are reset, so user validation hints remain intact.
          */
         function clearAllRecoveryHighlights() {
             const highlighted = recoverSharesContainer.querySelectorAll('[data-row-highlight="true"]');
             highlighted.forEach(input => {
                 input.classList.remove('invalid');
                 input.removeAttribute('data-row-highlight');
+                const container = input.closest('.share-input-container');
+                if (container) {
+                    container.style.borderColor = ''; // Reset border to default
+                }
             });
+        }
+
+        /**
+         * Highlights all inputs for a specific row in a specific share container.
+         * Used for pre-flight validation where the faulty share is known.
+         * @param {number} shareIndex - The 1-based index of the share container.
+         * @param {number} rowIndex - The 0-based index of the row to highlight.
+         */
+        function highlightShareRow(shareIndex, rowIndex) {
+            const container = document.getElementById(`share-container-${shareIndex}`);
+            if (!container) return;
+            const inputs = container.querySelectorAll(`input[data-row-index="${rowIndex}"]`);
+            inputs.forEach(input => markInputInvalid(input, input.dataset.fieldLabel || 'Row value mismatch', { rowHighlight: true }));
         }
 
         /**
@@ -1849,10 +2099,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
          */
         function highlightErrorRow(rowIndex, targetShareNumber = null) {
             if (typeof rowIndex !== 'number' || rowIndex < 0) return;
-            const rowsPerShare = WORDS_PER_ROW + 1; // 3 words + 1 checksum input
-            const inputsPerShare = rowsPerShare * (recoverWordCount / WORDS_PER_ROW);
             const shareContainers = recoverSharesContainer.querySelectorAll('.share-input-container');
-
             shareContainers.forEach(container => {
                 if (targetShareNumber) {
                     const shareNumberInput = container.querySelector('[id^="recover-x-"]');
@@ -1861,22 +2108,34 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         return;
                     }
                 }
-
-                const inputs = Array.from(container.querySelectorAll('.seed-word-row input'));
-                if (inputs.length !== inputsPerShare) return;
-
-                const start = rowIndex * rowsPerShare;
-                const end = start + rowsPerShare;
-                if (start < 0 || end > inputs.length) return;
-
-                for (let i = start; i < end; i++) {
-                    const input = inputs[i];
-                    input.classList.add('invalid');
-                    input.setAttribute('data-row-highlight', 'true');
-                }
+                const inputs = container.querySelectorAll(`input[data-row-index="${rowIndex}"]`);
+                inputs.forEach(input => markInputInvalid(input, input.dataset.fieldLabel || 'Row value mismatch', { rowHighlight: true }));
             });
         }
         
+        /**
+         * Marks the "Master Verification" input field as invalid on specific share forms.
+         * If a share has an internal checksum error, it's a "suspect". If master verification
+         * fails, we highlight the master input on shares that are NOT suspects, as they are
+         * the likely source of the master error.
+         * @param {Set<number>} sharesWithInvalidChecksums - A set of share numbers with internal errors.
+         * @param {Array<Object>} shares - The array of share objects from the UI, needed for context.
+         */
+        function highlightMasterError(sharesWithInvalidChecksums, shares) {
+            const masterInputs = document.querySelectorAll('[id^="recover-master-"]');
+            const suspectsExist = sharesWithInvalidChecksums && sharesWithInvalidChecksums.size > 0;
+            masterInputs.forEach(input => {
+                const shareIndex = parseInt(input.id.split('-').pop(), 10);
+                const share = shares.find(s => s.shareIndex === shareIndex);
+                if (!share) return;
+                const shouldHighlight = suspectsExist ? sharesWithInvalidChecksums.has(share.shareNumber) : true;
+                if (shouldHighlight) {
+                    const label = input.dataset.fieldLabel || `Share ${shareIndex} master verification`;
+                    markInputInvalid(input, `${label} failed master verification.`, { rowHighlight: true });
+                }
+            });
+        }
+
         // ==========================================================================
         // SECTION 6: UI - MODALS & DIALOGS
         // ==========================================================================
@@ -2074,13 +2333,31 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         /**
          * Dynamically generates and displays the recovered mnemonic on Page 4.
          * @param {string} mnemonic - The recovered BIP39 mnemonic string.
+         * @param {boolean} [showWarning=false] - If true, displays a permanent warning.
          */
-        function displayRecoveredMnemonic(mnemonic) {
+        function displayRecoveredMnemonic(mnemonic, showWarning = false) {
             const words = mnemonic.split(' ');
             const container = document.querySelector('#pageRecover2 .share-word-list');
-            if (!container) return;
+            const pageContainer = document.getElementById('pageRecover2');
+            if (!container || !pageContainer) return;
 
-            container.innerHTML = ''; // Clear previous results
+            // Clear previous results and warnings
+            container.innerHTML = ''; 
+            const existingWarning = pageContainer.querySelector('.alert-error');
+            if (existingWarning) {
+                existingWarning.remove();
+            }
+
+            if (showWarning) {
+                const warningDiv = document.createElement('div');
+                warningDiv.className = 'alert alert-error';
+                warningDiv.innerHTML = '<strong>WARNING: INVALID SEED.</strong> This recovery phrase has an incorrect BIP39 checksum. DO NOT use it to store funds.';
+                // Insert warning before the component card containing the seed phrase
+                const targetCard = pageContainer.querySelector('.component-card:nth-of-type(2)');
+                if(targetCard) {
+                    targetCard.insertAdjacentElement('beforebegin', warningDiv);
+                }
+            }
 
             words.forEach((word, index) => {
                 const item = document.createElement('div');
@@ -2219,344 +2496,449 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
     <script>
         // ==========================================================================
-        // CRYPTO LOGIC (GF(2053) + BIP39)
+        // SCHIAVINATO SHARING LIBRARY (Embedded for offline use)
+        // - This object contains all core cryptographic and validation logic.
+        // - It is self-contained and has no dependencies on the DOM or UI scripts.
         // ==========================================================================
+        const SchiavinatoSharing = (function() {
+            'use strict';
 
-        const FIELD_PRIME = 2053;
-        const WORDS_PER_ROW = 3;
+            // ==========================================================================
+            // CONSTANTS & CONFIG
+            // ==========================================================================
+            const FIELD_PRIME = 2053;
+            const WORDS_PER_ROW = 3;
 
-        function mod(value) {
-            const result = value % FIELD_PRIME;
-            return result < 0 ? result + FIELD_PRIME : result;
-        }
-
-        function modAdd(a, b) {
-            return mod(a + b);
-        }
-
-        function modSub(a, b) {
-            return mod(a - b);
-        }
-
-        function modMul(a, b) {
-            return mod(a * b);
-        }
-
-        function modInv(value) {
-            const val = mod(value);
-            if (val === 0) {
-                throw new Error('Attempted to invert zero in GF(2053).');
+            // ==========================================================================
+            // CORE GALOIS FIELD (GF(2053)) ARITHMETIC
+            // ==========================================================================
+            function mod(value) {
+                const result = value % FIELD_PRIME;
+                return result < 0 ? result + FIELD_PRIME : result;
             }
-            let t = 0;
-            let newT = 1;
-            let r = FIELD_PRIME;
-            let newR = val;
-            while (newR !== 0) {
-                const quotient = Math.floor(r / newR);
-                [t, newT] = [newT, t - quotient * newT];
-                [r, newR] = [newR, r - quotient * newR];
-            }
-            if (r > 1) {
-                throw new Error('Value is not invertible in GF(2053).');
-            }
-            if (t < 0) {
-                t += FIELD_PRIME;
-            }
-            return t;
-        }
 
-        function getRandomIntInclusive(max) {
-            if (!window.crypto || !window.crypto.getRandomValues) {
-                throw new Error('Secure randomness (window.crypto.getRandomValues) is required.');
+            function modAdd(a, b) {
+                return mod(a + b);
             }
-            const range = max + 1;
-            if (range <= 0) {
-                throw new Error('Invalid range for randomness.');
-            }
-            const maxUint32 = 0x100000000;
-            const limit = maxUint32 - (maxUint32 % range);
-            const buffer = new Uint32Array(1);
-            let value;
-            do {
-                window.crypto.getRandomValues(buffer);
-                value = buffer[0];
-            } while (value >= limit);
-            return value % range;
-        }
 
-        function getRandomFieldElement() {
-            return getRandomIntInclusive(FIELD_PRIME - 1);
-        }
-
-        function randomPolynomial(secret, degree) {
-            const coefficients = [mod(secret)];
-            for (let i = 0; i < degree; i++) {
-                coefficients.push(getRandomFieldElement());
+            function modSub(a, b) {
+                return mod(a - b);
             }
-            return coefficients;
-        }
 
-        function evaluatePolynomial(coefficients, x) {
-            let result = 0;
-            const fieldX = mod(x);
-            for (let i = coefficients.length - 1; i >= 0; i--) {
-                result = modAdd(modMul(result, fieldX), coefficients[i]);
+            function modMul(a, b) {
+                return mod(a * b);
             }
-            return result;
-        }
 
-        function lagrangeInterpolateAtZero(points) {
-            if (!Array.isArray(points) || points.length === 0) {
-                throw new Error('Interpolation requires at least one point.');
-            }
-            let sum = 0;
-            for (let j = 0; j < points.length; j++) {
-                let numerator = 1;
-                let denominator = 1;
-                const xj = mod(points[j].x);
-                const yj = mod(points[j].y);
-                for (let m = 0; m < points.length; m++) {
-                    if (m === j) continue;
-                    const xm = mod(points[m].x);
-                    numerator = modMul(numerator, mod(FIELD_PRIME - xm));
-                    denominator = modMul(denominator, modSub(xj, xm));
+            function modInv(value) {
+                const val = mod(value);
+                if (val === 0) {
+                    throw new Error('Attempted to invert zero in GF(2053).');
                 }
-                const term = modMul(yj, modMul(numerator, modInv(denominator)));
-                sum = modAdd(sum, term);
-            }
-            return sum;
-        }
-
-        function sanitizeMnemonic(mnemonic) {
-            if (typeof mnemonic !== 'string') {
-                throw new Error('Mnemonic must be a string.');
-            }
-            const normalized = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
-            if (!normalized) {
-                throw new Error('Mnemonic cannot be empty.');
-            }
-            return normalized;
-        }
-
-        function ensureSupportedWordCount(wordCount) {
-            if (wordCount !== 12 && wordCount !== 24) {
-                throw new Error('This tool currently supports only 12- or 24-word mnemonics.');
-            }
-        }
-
-        function computeRowChecks(wordIndices) {
-            const rowCount = wordIndices.length / WORDS_PER_ROW;
-            const checks = [];
-            for (let row = 0; row < rowCount; row++) {
-                const base = row * WORDS_PER_ROW;
-                const sum = modAdd(modAdd(wordIndices[base], wordIndices[base + 1]), wordIndices[base + 2]);
-                checks.push(sum);
-            }
-            return checks;
-        }
-
-        function normalizeShareValue(value, label) {
-            if (!Number.isInteger(value)) {
-                throw new Error(`${label} must be an integer inside GF(2053).`);
-            }
-            if (value < 0 || value >= FIELD_PRIME) {
-                throw new Error(`${label} must be between 0 and ${FIELD_PRIME - 1}.`);
-            }
-            return value;
-        }
-
-        function validateSharesForRecovery(shares, wordCount) {
-            const rowCount = wordCount / WORDS_PER_ROW;
-            shares.forEach((share, index) => {
-                if (!Number.isInteger(share.shareNumber) || share.shareNumber <= 0 || share.shareNumber >= FIELD_PRIME) {
-                    throw new Error(`Share #${index + 1} is missing a valid share number (1-${FIELD_PRIME - 1}).`);
+                let t = 0;
+                let newT = 1;
+                let r = FIELD_PRIME;
+                let newR = val;
+                while (newR !== 0) {
+                    const quotient = Math.floor(r / newR);
+                    [t, newT] = [newT, t - quotient * newT];
+                    [r, newR] = [newR, r - quotient * newR];
                 }
-                if (!Array.isArray(share.wordShares) || share.wordShares.length !== wordCount) {
-                    throw new Error(`Share #${share.shareNumber} does not contain ${wordCount} word values.`);
+                if (r > 1) {
+                    throw new Error('Value is not invertible in GF(2053).');
                 }
-                if (!Array.isArray(share.checksumShares) || share.checksumShares.length !== rowCount) {
-                    throw new Error(`Share #${share.shareNumber} does not contain ${rowCount} checksum values.`);
+                if (t < 0) {
+                    t += FIELD_PRIME;
                 }
-                if (!Number.isInteger(share.masterVerificationShare)) {
-                    throw new Error(`Share #${share.shareNumber} is missing a master verification share.`);
-                }
-            });
-        }
+                return t;
+            }
 
-        function ensureShareNumbersDistinct(shares) {
-            const seen = new Set();
-            for (const share of shares) {
-                if (seen.has(share.shareNumber)) {
-                    throw new Error('Duplicate share numbers detected.');
+            // ==========================================================================
+            // CRYPTOGRAPHICALLY SECURE RANDOMNESS
+            // ==========================================================================
+            function getRandomIntInclusive(max) {
+                if (!window.crypto || !window.crypto.getRandomValues) {
+                    throw new Error('Secure randomness (window.crypto.getRandomValues) is required.');
                 }
-                seen.add(share.shareNumber);
-            }
-        }
-
-        async function splitBip39(mnemonic, k, n, wordlist) {
-            if (!Number.isInteger(k) || !Number.isInteger(n)) {
-                throw new Error('Threshold (k) and total shares (n) must be integers.');
-            }
-            if (k < 2) {
-                throw new Error('Threshold k must be at least 2.');
-            }
-            if (k > n) {
-                throw new Error('Threshold k cannot exceed n.');
-            }
-            if (n >= FIELD_PRIME) {
-                throw new Error('Total shares (n) must be less than 2053.');
-            }
-            const normalizedMnemonic = sanitizeMnemonic(mnemonic);
-            await validateBIP39Mnemonic(normalizedMnemonic, wordlist);
-            const words = normalizedMnemonic.split(' ');
-            const wordCount = words.length;
-            ensureSupportedWordCount(wordCount);
-            const wordIndices = words.map((word) => {
-                const index = wordlist.indexOf(word);
-                if (index === -1) {
-                    throw new Error(`Unknown mnemonic word: "${word}".`);
+                const range = max + 1;
+                if (range <= 0) {
+                    throw new Error('Invalid range for randomness.');
                 }
-                return index;
-            });
-            const checksumSecrets = computeRowChecks(wordIndices);
-            const masterSecret = wordIndices.reduce((acc, value) => modAdd(acc, value), 0);
-            const degree = k - 1;
+                const maxUint32 = 0x100000000;
+                const limit = maxUint32 - (maxUint32 % range);
+                const buffer = new Uint32Array(1);
+                let value;
+                do {
+                    window.crypto.getRandomValues(buffer);
+                    value = buffer[0];
+                } while (value >= limit);
+                return value % range;
+            }
 
-            // --- TEMPORARY DEBUG START ---
-            // To revert, uncomment the ORIGINAL lines and remove the TEMPORARY DEBUG lines/blocks.
-            const debugCoefficients = { words: [], checksums: [], master: null }; // TEMPORARY DEBUG
-            // const wordPolynomials = wordIndices.map((secret) => randomPolynomial(secret, degree)); // ORIGINAL
-            const wordPolynomials = wordIndices.map((secret) => { // TEMPORARY DEBUG
-                const poly = randomPolynomial(secret, degree); // TEMPORARY DEBUG
-                debugCoefficients.words.push(poly.slice(1)); // TEMPORARY DEBUG
-                return poly; // TEMPORARY DEBUG
-            }); // TEMPORARY DEBUG
-            // const checksumPolynomials = checksumSecrets.map((secret) => randomPolynomial(secret, degree)); // ORIGINAL
-            const checksumPolynomials = checksumSecrets.map((secret) => { // TEMPORARY DEBUG
-                const poly = randomPolynomial(secret, degree); // TEMPORARY DEBUG
-                debugCoefficients.checksums.push(poly.slice(1)); // TEMPORARY DEBUG
-                return poly; // TEMPORARY DEBUG
-            }); // TEMPORARY DEBUG
-            // const masterPolynomial = randomPolynomial(masterSecret, degree); // ORIGINAL
-            const masterPolynomial = randomPolynomial(masterSecret, degree); // TEMPORARY DEBUG
-            debugCoefficients.master = masterPolynomial.slice(1); // TEMPORARY DEBUG
-            // --- TEMPORARY DEBUG END ---
+            function getRandomFieldElement() {
+                return getRandomIntInclusive(FIELD_PRIME - 1);
+            }
             
-            const shares = [];
-            for (let shareIndex = 1; shareIndex <= n; shareIndex++) {
-                const share = {
-                    shareNumber: shareIndex,
-                    wordShares: [],
-                    checksumShares: [],
-                    masterVerificationShare: 0
+            // ==========================================================================
+            // POLYNOMIAL & INTERPOLATION LOGIC
+            // ==========================================================================
+            function randomPolynomial(secret, degree) {
+                const coefficients = [mod(secret)];
+                for (let i = 0; i < degree; i++) {
+                    coefficients.push(getRandomFieldElement());
+                }
+                return coefficients;
+            }
+
+            function evaluatePolynomial(coefficients, x) {
+                let result = 0;
+                const fieldX = mod(x);
+                for (let i = coefficients.length - 1; i >= 0; i--) {
+                    result = modAdd(modMul(result, fieldX), coefficients[i]);
+                }
+                return result;
+            }
+
+            function lagrangeInterpolateAtZero(points) {
+                if (!Array.isArray(points) || points.length === 0) {
+                    throw new Error('Interpolation requires at least one point.');
+                }
+                let sum = 0;
+                for (let j = 0; j < points.length; j++) {
+                    let numerator = 1;
+                    let denominator = 1;
+                    const xj = mod(points[j].x);
+                    const yj = mod(points[j].y);
+                    for (let m = 0; m < points.length; m++) {
+                        if (m === j) continue;
+                        const xm = mod(points[m].x);
+                        numerator = modMul(numerator, mod(FIELD_PRIME - xm));
+                        denominator = modMul(denominator, modSub(xj, xm));
+                    }
+                    const term = modMul(yj, modMul(numerator, modInv(denominator)));
+                    sum = modAdd(sum, term);
+                }
+                return sum;
+            }
+
+            // ==========================================================================
+            // CHECKSUM & VALIDATION HELPERS
+            // ==========================================================================
+            function computeRowChecks(wordIndices) {
+                const rowCount = wordIndices.length / WORDS_PER_ROW;
+                const checks = [];
+                for (let row = 0; row < rowCount; row++) {
+                    const base = row * WORDS_PER_ROW;
+                    const sum = modAdd(modAdd(wordIndices[base], wordIndices[base + 1]), wordIndices[base + 2]);
+                    checks.push(sum);
+                }
+                return checks;
+            }
+            
+            function computeMasterCheck(wordIndices) {
+                return wordIndices.reduce((acc, value) => modAdd(acc, value), 0);
+            }
+            
+            function sanitizeMnemonic(mnemonic) {
+                if (typeof mnemonic !== 'string') {
+                    throw new Error('Mnemonic must be a string.');
+                }
+                const normalized = mnemonic.trim().toLowerCase().replace(/\s+/g, ' ');
+                if (!normalized) {
+                    throw new Error('Mnemonic cannot be empty.');
+                }
+                return normalized;
+            }
+
+            function ensureSupportedWordCount(wordCount) {
+                if (wordCount !== 12 && wordCount !== 24) {
+                    throw new Error('This tool currently supports only 12- or 24-word mnemonics.');
+                }
+            }
+
+            function normalizeShareValue(value, label) {
+                if (!Number.isInteger(value)) {
+                    throw new Error(`${label} must be an integer inside GF(2053).`);
+                }
+                if (value < 0 || value >= FIELD_PRIME) {
+                    throw new Error(`${label} must be between 0 and ${FIELD_PRIME - 1}.`);
+                }
+                return value;
+            }
+
+            function validateSharesForRecovery(shares, wordCount) {
+                const rowCount = wordCount / WORDS_PER_ROW;
+                shares.forEach((share, index) => {
+                    if (!Number.isInteger(share.shareNumber) || share.shareNumber <= 0 || share.shareNumber >= FIELD_PRIME) {
+                        throw new Error(`Share #${index + 1} is missing a valid share number (1-${FIELD_PRIME - 1}).`);
+                    }
+                    if (!Array.isArray(share.wordShares) || share.wordShares.length !== wordCount) {
+                        throw new Error(`Share #${share.shareNumber} does not contain ${wordCount} word values.`);
+                    }
+                    if (!Array.isArray(share.checksumShares) || share.checksumShares.length !== rowCount) {
+                        throw new Error(`Share #${share.shareNumber} does not contain ${rowCount} checksum values.`);
+                    }
+                    if (!Number.isInteger(share.masterVerificationShare)) {
+                        throw new Error(`Share #${share.shareNumber} is missing a master verification share.`);
+                    }
+                });
+            }
+
+            function ensureShareNumbersDistinct(shares) {
+                const seen = new Set();
+                for (const share of shares) {
+                    if (seen.has(share.shareNumber)) {
+                        throw new Error('Duplicate share numbers detected.');
+                    }
+                    seen.add(share.shareNumber);
+                }
+            }
+            
+            // ==========================================================================
+            // BIP39 CHECKSUM VALIDATION
+            // ==========================================================================
+            function bytesToBinary(bytes) {
+                return Array.from(bytes).map((b) => b.toString(2).padStart(8, '0')).join('');
+            }
+
+            async function computeSha256(data) {
+                if (typeof sha256 !== 'function' || typeof sha256.arrayBuffer !== 'function') {
+                    throw new Error('Embedded SHA-256 implementation is not available.');
+                }
+                return new Uint8Array(sha256.arrayBuffer(data));
+            }
+
+            async function validateBIP39Mnemonic(mnemonic, wordlist) {
+                const words = mnemonic.trim().split(/\s+/);
+                const wordCount = words.length;
+                if (wordCount % 3 !== 0 || wordCount < 12 || wordCount > 24) {
+                    throw new Error(`Invalid mnemonic length: expected 12, 15, 18, 21, or 24 words, received ${wordCount}.`);
+                }
+                let binaryMnemonic = '';
+                for (const word of words) {
+                    const index = wordlist.indexOf(word);
+                    if (index === -1) {
+                        throw new Error(`Invalid mnemonic word: "${word}" is not in the BIP39 list.`);
+                    }
+                    binaryMnemonic += index.toString(2).padStart(11, '0');
+                }
+                const entropyBits = (wordCount * 11) - (wordCount / 3);
+                const checksumLength = wordCount / 3;
+                const entropyBinary = binaryMnemonic.substring(0, entropyBits);
+                const checksumBinary = binaryMnemonic.substring(entropyBits);
+                const entropyBytes = new Uint8Array(entropyBits / 8);
+                for (let i = 0; i < (entropyBits / 8); i++) {
+                    const byteString = entropyBinary.substr(i * 8, 8);
+                    entropyBytes[i] = parseInt(byteString, 2);
+                }
+                const hashBytes = await computeSha256(entropyBytes);
+                const hashBinary = bytesToBinary(hashBytes);
+                const derivedChecksum = hashBinary.substring(0, checksumLength);
+                if (derivedChecksum !== checksumBinary) {
+                    throw new Error('Mnemonic checksum is invalid.');
+                }
+                return true;
+            }
+            
+            // ==========================================================================
+            // PUBLIC API METHODS
+            // ==========================================================================
+            async function splitBip39(mnemonic, k, n, wordlist) {
+                if (!Number.isInteger(k) || !Number.isInteger(n)) {
+                    throw new Error('Threshold (k) and total shares (n) must be integers.');
+                }
+                if (k < 2) {
+                    throw new Error('Threshold k must be at least 2.');
+                }
+                if (k > n) {
+                    throw new Error('Threshold k cannot exceed n.');
+                }
+                if (n >= FIELD_PRIME) {
+                    throw new Error('Total shares (n) must be less than 2053.');
+                }
+                const normalizedMnemonic = sanitizeMnemonic(mnemonic);
+                await validateBIP39Mnemonic(normalizedMnemonic, wordlist);
+                const words = normalizedMnemonic.split(' ');
+                const wordCount = words.length;
+                ensureSupportedWordCount(wordCount);
+                const wordIndices = words.map((word) => {
+                    const index = wordlist.indexOf(word);
+                    if (index === -1) {
+                        throw new Error(`Unknown mnemonic word: "${word}".`);
+                    }
+                    return index;
+                });
+                const checksumSecrets = computeRowChecks(wordIndices);
+                const masterSecret = wordIndices.reduce((acc, value) => modAdd(acc, value), 0);
+                const degree = k - 1;
+
+                // --- TEMPORARY DEBUG START ---
+                // To revert, uncomment the ORIGINAL lines and remove the TEMPORARY DEBUG lines/blocks.
+                const debugCoefficients = { words: [], checksums: [], master: null }; // TEMPORARY DEBUG
+                // const wordPolynomials = wordIndices.map((secret) => randomPolynomial(secret, degree)); // ORIGINAL
+                const wordPolynomials = wordIndices.map((secret) => { // TEMPORARY DEBUG
+                    const poly = randomPolynomial(secret, degree); // TEMPORARY DEBUG
+                    debugCoefficients.words.push(poly.slice(1)); // TEMPORARY DEBUG
+                    return poly; // TEMPORARY DEBUG
+                }); // TEMPORARY DEBUG
+                // const checksumPolynomials = checksumSecrets.map((secret) => randomPolynomial(secret, degree)); // ORIGINAL
+                const checksumPolynomials = checksumSecrets.map((secret) => { // TEMPORARY DEBUG
+                    const poly = randomPolynomial(secret, degree); // TEMPORARY DEBUG
+                    debugCoefficients.checksums.push(poly.slice(1)); // TEMPORARY DEBUG
+                    return poly; // TEMPORARY DEBUG
+                }); // TEMPORARY DEBUG
+                // const masterPolynomial = randomPolynomial(masterSecret, degree); // ORIGINAL
+                const masterPolynomial = randomPolynomial(masterSecret, degree); // TEMPORARY DEBUG
+                debugCoefficients.master = masterPolynomial.slice(1); // TEMPORARY DEBUG
+                // --- TEMPORARY DEBUG END ---
+                
+                const shares = [];
+                for (let shareIndex = 1; shareIndex <= n; shareIndex++) {
+                    const share = {
+                        shareNumber: shareIndex,
+                        wordShares: [],
+                        checksumShares: [],
+                        masterVerificationShare: 0
+                    };
+                    for (const polynomial of wordPolynomials) {
+                        share.wordShares.push(evaluatePolynomial(polynomial, shareIndex));
+                    }
+                    for (const polynomial of checksumPolynomials) {
+                        share.checksumShares.push(evaluatePolynomial(polynomial, shareIndex));
+                    }
+                    share.masterVerificationShare = evaluatePolynomial(masterPolynomial, shareIndex);
+                    shares.push(share);
+                }
+                // return { shares }; // ORIGINAL
+                return { shares, debugCoefficients }; // TEMPORARY DEBUG
+            }
+
+            /**
+             * Performs a unified recovery and validation pipeline. This function does not throw on
+             * validation failures; instead, it returns a detailed report object containing the
+             * recovered mnemonic (if successful) and a breakdown of any errors encountered.
+             * @param {Array<Object>} shares - An array of share objects from the UI.
+             * @param {number} wordCount - The expected word count of the original mnemonic (12 or 24).
+             * @param {Array<string>} wordlist - The BIP39 wordlist.
+             * @returns {Promise<Object>} A report object, e.g.,
+             *   { recoveredMnemonic: "...", errors: { row: [0, 2], master: true, bip39: false, generic: null }, sharesWithInvalidChecksums: Set<number> }
+             */
+            async function recoverAndValidate(shares, wordCount, wordlist) {
+                const report = {
+                    recoveredMnemonic: null,
+                    errors: {
+                        row: [],
+                        master: false,
+                        bip39: false,
+                        generic: null
+                    },
+                    sharesWithInvalidChecksums: new Set()
                 };
-                for (const polynomial of wordPolynomials) {
-                    share.wordShares.push(evaluatePolynomial(polynomial, shareIndex));
-                }
-                for (const polynomial of checksumPolynomials) {
-                    share.checksumShares.push(evaluatePolynomial(polynomial, shareIndex));
-                }
-                share.masterVerificationShare = evaluatePolynomial(masterPolynomial, shareIndex);
-                shares.push(share);
-            }
-            // return { shares }; // ORIGINAL
-            return { shares, debugCoefficients }; // TEMPORARY DEBUG
-        }
 
-        async function recoverBip39(shares, wordCount, wordlist) {
-            if (!Array.isArray(shares) || shares.length < 2) {
-                throw new Error('At least two shares are required for recovery.');
-            }
-            ensureSupportedWordCount(wordCount);
-            if (wordCount % WORDS_PER_ROW !== 0) {
-                throw new Error('Word count must be divisible by 3.');
-            }
-            validateSharesForRecovery(shares, wordCount);
-            ensureShareNumbersDistinct(shares);
-            const rowCount = wordCount / WORDS_PER_ROW;
-            const recoveredWords = [];
-            for (let i = 0; i < wordCount; i++) {
-                const points = shares.map((share) => ({
-                    x: mod(share.shareNumber),
-                    y: normalizeShareValue(share.wordShares[i], `Word share #${i + 1} (share ${share.shareNumber})`)
-                }));
-                recoveredWords.push(lagrangeInterpolateAtZero(points));
-            }
-            const recoveredChecks = [];
-            for (let row = 0; row < rowCount; row++) {
-                const points = shares.map((share) => ({
-                    x: mod(share.shareNumber),
-                    y: normalizeShareValue(share.checksumShares[row], `Checksum share C${row + 1} (share ${share.shareNumber})`)
-                }));
-                recoveredChecks.push(lagrangeInterpolateAtZero(points));
-            }
-            const recomputedChecks = computeRowChecks(recoveredWords);
-            for (let row = 0; row < rowCount; row++) {
-                if (recoveredChecks[row] !== recomputedChecks[row]) {
-                    throw new ChecksumError(`Checksum verification failed for row ${row + 1}.`, row);
-                }
-            }
-            const masterPoints = shares.map((share) => ({
-                x: mod(share.shareNumber),
-                y: normalizeShareValue(share.masterVerificationShare, `Master verification (share ${share.shareNumber})`)
-            }));
-            const recoveredMaster = lagrangeInterpolateAtZero(masterPoints);
-            const recomputedMaster = recoveredWords.reduce((acc, value) => modAdd(acc, value), 0);
-            if (recoveredMaster !== recomputedMaster) {
-                throw new Error('Master verification number mismatch. Please double-check the input shares.');
-            }
-            recoveredWords.forEach((value, index) => {
-                if (value < 0 || value >= 2048) {
-                    throw new Error(`Recovered word #${index + 1} is outside the BIP39 range (0–2047).`);
-                }
-            });
-            const mnemonic = recoveredWords.map((index) => wordlist[index]).join(' ');
-            await validateBIP39Mnemonic(mnemonic, wordlist);
-            return mnemonic;
-        }
+                try {
+                    // Pre-computation: Check internal consistency of each provided share's checksums
+                    shares.forEach(share => {
+                        const wordIndices = share.wordShares;
+                        const recomputedChecks = computeRowChecks(wordIndices);
+                        for (let i = 0; i < recomputedChecks.length; i++) {
+                            if (recomputedChecks[i] !== share.checksumShares[i]) {
+                                report.sharesWithInvalidChecksums.add(share.shareNumber);
+                                break; // No need to check other rows for this share
+                            }
+                        }
+                    });
 
-        function bytesToBinary(bytes) {
-            return Array.from(bytes).map((b) => b.toString(2).padStart(8, '0')).join('');
-        }
+                    // 1. Pre-flight checks for input validity
+                    if (!Array.isArray(shares) || shares.length < 2) {
+                        report.errors.generic = 'At least two shares are required for recovery.';
+                        return report;
+                    }
+                    ensureSupportedWordCount(wordCount);
+                    if (wordCount % WORDS_PER_ROW !== 0) {
+                        report.errors.generic = 'Word count must be divisible by the words per row constant.';
+                        return report;
+                    }
+                    validateSharesForRecovery(shares, wordCount);
+                    ensureShareNumbersDistinct(shares);
 
-        async function computeSha256(data) {
-            if (typeof sha256 !== 'function' || typeof sha256.arrayBuffer !== 'function') {
-                throw new Error('Embedded SHA-256 implementation is not available.');
-            }
-            return new Uint8Array(sha256.arrayBuffer(data));
-        }
+                    const rowCount = wordCount / WORDS_PER_ROW;
 
-        async function validateBIP39Mnemonic(mnemonic, wordlist) {
-            const words = mnemonic.trim().split(/\s+/);
-            const wordCount = words.length;
-            if (wordCount % 3 !== 0 || wordCount < 12 || wordCount > 24) {
-                throw new Error(`Invalid mnemonic length: expected 12, 15, 18, 21, or 24 words, received ${wordCount}.`);
-            }
-            let binaryMnemonic = '';
-            for (const word of words) {
-                const index = wordlist.indexOf(word);
-                if (index === -1) {
-                    throw new Error(`Invalid mnemonic word: "${word}" is not in the BIP39 list.`);
+                    // 2. Recover all secret numbers via Lagrange Interpolation
+                    const recoveredWords = [];
+                    for (let i = 0; i < wordCount; i++) {
+                        const points = shares.map((share) => ({
+                            x: mod(share.shareNumber),
+                            y: normalizeShareValue(share.wordShares[i], `Word share #${i + 1} (share ${share.shareNumber})`)
+                        }));
+                        recoveredWords.push(lagrangeInterpolateAtZero(points));
+                    }
+
+                    const recoveredChecks = [];
+                    for (let row = 0; row < rowCount; row++) {
+                        const points = shares.map((share) => ({
+                            x: mod(share.shareNumber),
+                            y: normalizeShareValue(share.checksumShares[row], `Checksum share C${row + 1} (share ${share.shareNumber})`)
+                        }));
+                        recoveredChecks.push(lagrangeInterpolateAtZero(points));
+                    }
+                    
+                    const masterPoints = shares.map((share) => ({
+                        x: mod(share.shareNumber),
+                        y: normalizeShareValue(share.masterVerificationShare, `Master verification (share ${share.shareNumber})`)
+                    }));
+                    const recoveredMaster = lagrangeInterpolateAtZero(masterPoints);
+                    
+                    // 3. Perform internal Schiavinato validations
+                    const recomputedChecks = computeRowChecks(recoveredWords);
+                    for (let row = 0; row < rowCount; row++) {
+                        if (recoveredChecks[row] !== recomputedChecks[row]) {
+                            report.errors.row.push(row);
+                        }
+                    }
+
+                    const recomputedMaster = computeMasterCheck(recoveredWords);
+                    if (recoveredMaster !== recomputedMaster) {
+                        report.errors.master = true;
+                    }
+
+                    // 4. If internal checks pass, proceed to BIP39 validation
+                    if (report.errors.row.length === 0 && !report.errors.master) {
+                        for(let i = 0; i < recoveredWords.length; i++) {
+                            const value = recoveredWords[i];
+                             if (value < 0 || value >= 2048) {
+                                report.errors.generic = `Recovered word #${i + 1} ("${value}") is outside the BIP39 range (0–2047). Cannot form a valid mnemonic.`;
+                                return report;
+                            }
+                        }
+                        
+                        const mnemonic = recoveredWords.map((index) => wordlist[index]).join(' ');
+                        report.recoveredMnemonic = mnemonic;
+
+                        try {
+                            await validateBIP39Mnemonic(mnemonic, wordlist);
+                        } catch (bip39Error) {
+                            report.errors.bip39 = true;
+                            // The mnemonic is structurally valid but fails the BIP39 checksum.
+                            // We keep the mnemonic in the report for the UI to handle this specific case.
+                        }
+                    }
+
+                } catch (error) {
+                    // Catch unrecoverable errors (e.g., bad inputs, non-invertible matrix)
+                    report.errors.generic = error.message;
                 }
-                binaryMnemonic += index.toString(2).padStart(11, '0');
+
+                return report;
             }
-            const entropyBits = (wordCount * 11) - (wordCount / 3);
-            const checksumLength = wordCount / 3;
-            const entropyBinary = binaryMnemonic.substring(0, entropyBits);
-            const checksumBinary = binaryMnemonic.substring(entropyBits);
-            const entropyBytes = new Uint8Array(entropyBits / 8);
-            for (let i = 0; i < (entropyBits / 8); i++) {
-                const byteString = entropyBinary.substr(i * 8, 8);
-                entropyBytes[i] = parseInt(byteString, 2);
-            }
-            const hashBytes = await computeSha256(entropyBytes);
-            const hashBinary = bytesToBinary(hashBytes);
-            const derivedChecksum = hashBinary.substring(0, checksumLength);
-            if (derivedChecksum !== checksumBinary) {
-                throw new Error('Mnemonic checksum is invalid.');
-            }
-            return true;
-        }
+            
+            // Expose public methods
+            return {
+                splitBip39,
+                recoverAndValidate,
+                validateBIP39Mnemonic,
+                computeRowChecks,
+                computeMasterCheck
+            };
+        })();
 
         // BIP39 English wordlist (2048 words)
         const BIP39_WORDLIST = [
