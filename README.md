@@ -7,7 +7,7 @@ This repository hosts the whitepaper:
 
 **[`GRIFORTIS/Schiavinato_Sharing/WHITEPAPER.md`](https://github.com/GRIFORTIS/Schiavinato_Sharing/blob/main/WHITEPAPER.md)**
 
-The goal of this project is to document and provide reference material for a secret-sharing scheme tailored to BIP39 mnemonics. The primary artifacts at the moment are the whitepaper and test vectors; reference implementations will be developed under the `tools/` subdirectories.
+The goal of this project is to document and provide reference material for a secret-sharing scheme tailored to BIP39 mnemonics using **basic arithmetic**, designed to be performed entirely **by hand**. The primary artifacts currently available are the whitepaper and test vectors; reference implementations will be developed under the `tools/` subdirectory.
 
 ---
 
