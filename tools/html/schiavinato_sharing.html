@@ -227,6 +227,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         input[type="email"],
         input[type="password"],
         input[type="date"],
+        input[type="number"],
         select {
             width: 100%;
             padding: 12px;
@@ -541,6 +542,50 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             margin-bottom: 1.5rem;
             font-size: 1.25rem;
         }
+        .manual-helper-share-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 1.5rem;
+        }
+        .manual-helper-share-inputs .form-group {
+            margin-bottom: 0;
+        }
+        .manual-helper-share-inputs label {
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+        .manual-helper-share-inputs input {
+            width: 100%;
+        }
+        .manual-helper-error {
+            display: none;
+            margin-top: 1rem;
+        }
+        .lagrange-output {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 1.5rem;
+        }
+        .lagrange-result-item {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            background: var(--input-bg);
+        }
+        .lagrange-result-item p {
+            margin: 0 0 0.4rem 0;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        .lagrange-result-item code {
+            display: block;
+            text-align: center;
+            font-size: 1.1rem;
+            padding: 10px;
+        }
 
 
         /* Custom Modal Styles */
@@ -727,9 +772,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     <h2>Recover Wallet</h2>
                     <p>Enter your share data to recover the original seed phrase</p>
                 </button>
-                <button class="home-button" id="btn-manual-recovery-helper" disabled>
+                <button class="home-button" id="btn-manual-recovery-helper">
                     <h2>Manual Recovery Helper</h2>
-                    <p>Step-by-step guide for pencil & paper recovery (soon)</p>
+                    <p>Generate Lagrange multipliers to recombine paper shares offline</p>
                 </button>
 
                 <hr style="margin: 30px 0;">
@@ -855,39 +900,37 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             ========================================================================== -->
             <section id="pageManualHelper" style="display: none;">
                 
-                <!-- Instructions for Manual Use -->
                 <div class="component-card">
-                    <h2>How to Use This Tool</h2>
-                    <p>This tool helps you perform Schiavinato Sharing manually with pencil and paper by providing the necessary secure random numbers.</p>
+                    <h2>How Lagrange Multipliers Restore Your Wallet</h2>
+                    <p>This helper gives you the exact multipliers (λ) needed to recombine your paper shares. Multiply each encrypted value (Y) by its multiplier, sum the results, and reduce modulo 2053 to recover a row.</p>
                     <ol style="padding-left: 20px; margin-top: 1rem;">
-                        <li style="margin-bottom: 1em;">
-                            <strong>Get your BIP39 word indices:</strong> Find your 12 or 24 secret words on the official BIP39 English wordlist. You need the number (index) for each word. Our tool uses a <strong>zero-indexed</strong> list (the first word, "abandon", is 0). Be careful, as some lists online (like the one on GitHub) show line numbers starting from 1, which will produce incorrect results if used directly. A Pro tip is to copy and paste the wordlist into a spreadsheet and number it starting from 0.
-                        </li>
-                        <li style="margin-bottom: 1em;">
-                            <strong>Calculate Point Coordinates:</strong> For each of your secret word indices, use the polynomial equation shown above to calculate a "share" value (Y). The 'X' in the equation is the share number (e.g., 1 for the first share, 2 for the second, and so on).
-                        </li>
-                        <li style="margin-bottom: 1em;">
-                            <strong>All calculations are modulo 2053.</strong> This is a prime number. To perform a "modulo" operation, you divide your result by 2053 and take the remainder. For example, <code>2055 mod 2053</code> is <code>2</code>.
-                        </li>
+                        <li style="margin-bottom: 0.75em;">Record the share numbers (the <span class="mono">X</span> printed on each share) for the <strong>K</strong> shares you possess.</li>
+                        <li style="margin-bottom: 0.75em;">Use the multipliers to compute <code>Recovered = Σ(Y × λ) mod 2053</code> for each word and checksum row.</li>
+                        <li style="margin-bottom: 0.75em;">Repeat for every row and finally verify the master checksum to confirm the recovery.</li>
                     </ol>
                 </div>
 
-                <!-- Placeholder for the shared sharding scheme selector -->
-                <div id="manual-helper-scheme-placeholder"></div>
-
-                <!-- Polynomial Equation Display -->
                 <div class="component-card">
-                    <h2>2. Polynomial Equation</h2>
-                    <p>This is the equation used to generate your shares. Replace <code>&lt;BIP39 word indices&gt;</code> with your secret numbers (from 0 to 2047).</p>
-                    <div id="polynomial-display" style="background: var(--input-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center; margin-top: 1rem;">
-                        <!-- Equation will be dynamically inserted here by JS -->
+                    <h2>1. Select Scheme & Share Numbers</h2>
+                    <p>Switch between schemes and enter the share numbers (<span class="mono">X</span>) for the shares you currently have. Each share number must be unique.</p>
+                    <div id="manual-helper-scheme-placeholder"></div>
+                    <div class="manual-helper-share-inputs" id="manual-helper-share-inputs"></div>
+                    <div id="manual-helper-error" class="alert alert-error manual-helper-error"></div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button id="btn-show-multipliers" class="btn btn-primary" type="button" disabled>Show Multipliers</button>
                     </div>
                 </div>
 
-                <!-- Page Footer Buttons -->
-                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                <div class="component-card" id="manual-helper-results-card">
+                    <h2>2. Lagrange Multipliers</h2>
+                    <p>Use these multipliers with the corresponding share numbers. They only change if you change the set of shares being combined.</p>
+                    <div id="lagrange-output" class="lagrange-output">
+                        <p style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); margin: 0;">Enter the share numbers above to see the multipliers.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-start; margin-top: 20px;">
                     <button class="btn btn-secondary btn-back-home">Back to Home</button>
-                    <button id="btn-random-again" class="btn btn-primary">Random Again</button>
                 </div>
             </section>
 
@@ -1073,6 +1116,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             recoverFlowCache.push({ shareNumber: '', words: Array(32).fill('') });
         }
         let recoverWordCount = 24;
+        const manualHelperShareCache = {};
 
         let activeSuggestionIndex = -1;
         let allowMouseHover = false;
@@ -1241,6 +1285,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
         const btnGoToCreate = document.getElementById('btn-go-to-create');
         const btnGoToRecover = document.getElementById('btn-go-to-recover');
+        const btnManualRecoveryHelper = document.getElementById('btn-manual-recovery-helper');
         const btnManualShardingHelper = document.getElementById('btn-manual-sharding-helper');
         const btnsBackHome = document.querySelectorAll('.btn-back-home');
         const btnGenerateShares = document.getElementById('btn-generate-shares');
@@ -1249,7 +1294,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         const btnRecoverWallet = document.getElementById('btn-recover-wallet');
         const btnStartOverRecover = document.getElementById('btn-start-over-recover');
         const btnBackToRecover1 = document.getElementById('btn-back-to-recover1');
-        const btnRandomAgain = document.getElementById('btn-random-again');
+        const btnShowMultipliers = document.getElementById('btn-show-multipliers');
 
         const schemeRadios = document.querySelectorAll('input[name="scheme"]');
         const schemeExplanation = document.getElementById('scheme-explanation');
@@ -1262,10 +1307,12 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         const recoverBtn12Words = document.getElementById('recover-btn-12-words');
         const recoverBtn24Words = document.getElementById('recover-btn-24-words');
         
-        const polynomialDisplay = document.getElementById('polynomial-display');
         const sharedSchemeSelector = document.getElementById('shared-scheme-selector');
         const createSchemePlaceholder = document.getElementById('create-scheme-placeholder');
         const manualHelperSchemePlaceholder = document.getElementById('manual-helper-scheme-placeholder');
+        const manualHelperShareInputsContainer = document.getElementById('manual-helper-share-inputs');
+        const manualHelperErrorBox = document.getElementById('manual-helper-error');
+        const lagrangeOutputContainer = document.getElementById('lagrange-output');
 
         const modal = document.getElementById('custom-modal');
         const modalConfirmBtn = document.getElementById('modal-confirm');
@@ -1307,8 +1354,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 } else if (pageKey === 'manualHelper' && manualHelperSchemePlaceholder) {
                     manualHelperSchemePlaceholder.appendChild(sharedSchemeSelector);
                     sharedSchemeSelector.style.display = 'block';
-                    sharedSchemeSelector.querySelector('h2').textContent = '1. Splitting Scheme (Sharding)';
-                    updateManualHelperDisplay(); // Initial call to populate the display
+                    sharedSchemeSelector.querySelector('h2').textContent = 'Select a Splitting Scheme';
+                    updateManualHelperShareInputs();
                 }
             }
             
@@ -1327,7 +1374,12 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         btnContinueToHome.addEventListener('click', () => showPage('home'));
         btnGoToCreate.addEventListener('click', () => showPage('create1', 'Create Shares'));
         btnGoToRecover.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
-        btnManualShardingHelper.addEventListener('click', () => showPage('manualHelper', 'Manual Sharding Helper'));
+        if (btnManualRecoveryHelper) {
+            btnManualRecoveryHelper.addEventListener('click', () => showPage('manualHelper', 'Manual Recovery Helper'));
+        }
+        if (btnManualShardingHelper) {
+            btnManualShardingHelper.addEventListener('click', () => showPage('manualHelper', 'Manual Recovery Helper'));
+        }
         btnsBackHome.forEach(btn => btn.addEventListener('click', () => showPage('home')));
         
         btnGenerateShares.addEventListener('click', async () => {
@@ -1527,6 +1579,26 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             }
         });
 
+        if (btnShowMultipliers) {
+            btnShowMultipliers.addEventListener('click', () => {
+                const { ok, values } = validateManualHelperInputs();
+                if (!ok) {
+                    showManualHelperError('Enter valid, unique share numbers to generate multipliers.');
+                    resetManualHelperResults();
+                    return;
+                }
+                try {
+                    const multipliers = SchiavinatoSharing.computeLagrangeMultipliers(values);
+                    clearManualHelperError();
+                    displayManualHelperResults(values, multipliers);
+                } catch (error) {
+                    console.error('Manual helper multiplier error:', error);
+                    showManualHelperError(error.message || 'Could not compute multipliers. Check your inputs and try again.');
+                    resetManualHelperResults();
+                }
+            });
+        }
+
         /**
          * Processes the report from the recovery function and updates the UI accordingly.
          * It handles success, partial success (BIP39 checksum fail), and various failures.
@@ -1607,41 +1679,173 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             const content = explanations[selectedValue];
             schemeExplanation.innerHTML = `<h4>${content.title}</h4>${content.details}`;
             // Also update the manual helper display if that page is active
-            if(pages.manualHelper.style.display === 'block') {
-                updateManualHelperDisplay();
+            if (pages.manualHelper && pages.manualHelper.style.display === 'block') {
+                updateManualHelperShareInputs();
             }
         }
 
         /**
-         * Updates the display of the Manual Sharding Helper page with a new equation.
+         * Safely parses the current scheme value into threshold (k) and total (n).
          */
-        function updateManualHelperDisplay() {
-            if (!polynomialDisplay) return;
-
-            const selectedScheme = document.querySelector('input[name="scheme"]:checked').value;
-            // The <strong> tag here is more semantic for emphasizing the placeholder text
-            const s = '<strong class="mono" style="color: var(--cyber-gold);">&lt;BIP39 word indices&gt;</strong>';
-            let equation = '';
-
-            try {
-                if (selectedScheme === '2of3' || selectedScheme === '2of4') {
-                    // For a 2-of-N scheme, the polynomial is degree 1 (k-1)
-                    // f(X) = secret + r1 * X
-                    const r1 = SchiavinatoSharing.getRandomFieldElement();
-                    equation = `f(X) = ${s} + ${r1} * X`;
-                } else if (selectedScheme === '3of5') {
-                    // For a 3-of-5 scheme, the polynomial is degree 2 (k-1)
-                    // f(X) = secret + r1 * X + r2 * X^2
-                    const r1 = SchiavinatoSharing.getRandomFieldElement();
-                    const r2 = SchiavinatoSharing.getRandomFieldElement();
-                    equation = `f(X) = ${s} + ${r1} * X + ${r2} * X²`;
-                }
-                polynomialDisplay.innerHTML = `<code class="mono" style="font-size: 1.1rem; word-wrap: break-word;">${equation}</code>`;
-            } catch (error) {
-                // Display an error if the crypto API fails for some reason
-                polynomialDisplay.innerHTML = `<span style="color: var(--error-red);">Error: Could not generate secure random numbers.</span>`;
-                console.error("Manual helper error:", error);
+        function getSchemeThresholds(schemeValue) {
+            if (typeof schemeValue !== 'string') {
+                return { k: 2, n: 3 };
             }
+            const parts = schemeValue.split('of').map(Number);
+            return {
+                k: Number.isInteger(parts[0]) ? parts[0] : 2,
+                n: Number.isInteger(parts[1]) ? parts[1] : 3
+            };
+        }
+
+        /**
+         * Ensures we have a cached set of share numbers per scheme for the manual helper.
+         */
+        function ensureManualHelperCache(schemeValue, shareCount) {
+            if (!manualHelperShareCache[schemeValue] || manualHelperShareCache[schemeValue].length !== shareCount) {
+                manualHelperShareCache[schemeValue] = Array(shareCount).fill('');
+            }
+            return manualHelperShareCache[schemeValue];
+        }
+
+        function showManualHelperError(message) {
+            if (!manualHelperErrorBox) return;
+            manualHelperErrorBox.style.display = 'block';
+            manualHelperErrorBox.textContent = message;
+        }
+
+        function clearManualHelperError() {
+            if (!manualHelperErrorBox) return;
+            manualHelperErrorBox.style.display = 'none';
+            manualHelperErrorBox.textContent = '';
+        }
+
+        /**
+         * Regenerates the share number inputs for the manual helper when the scheme changes.
+         */
+        function updateManualHelperShareInputs() {
+            if (!manualHelperShareInputsContainer) return;
+            const selectedSchemeRadio = document.querySelector('input[name="scheme"]:checked');
+            if (!selectedSchemeRadio) return;
+            const schemeValue = selectedSchemeRadio.value;
+            const { k } = getSchemeThresholds(schemeValue);
+            const cache = ensureManualHelperCache(schemeValue, k);
+
+            manualHelperShareInputsContainer.innerHTML = '';
+            for (let i = 0; i < k; i++) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'form-group';
+                const label = document.createElement('label');
+                label.htmlFor = `manual-helper-share-${i + 1}`;
+                label.textContent = `Share ${i + 1} number`;
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.min = '1';
+                input.max = String(FIELD_PRIME - 1);
+                input.id = label.htmlFor;
+                input.className = 'mono';
+                input.placeholder = 'E.g., 3';
+                input.value = cache[i] ?? '';
+                input.dataset.fieldLabel = `Share number ${i + 1}`;
+                input.dataset.allowNumeric = 'true';
+                input.addEventListener('input', (event) => {
+                    cache[i] = event.target.value;
+                    validateManualHelperInputs();
+                });
+                wrapper.appendChild(label);
+                wrapper.appendChild(input);
+                manualHelperShareInputsContainer.appendChild(wrapper);
+            }
+
+            validateManualHelperInputs({ quiet: true });
+            resetManualHelperResults();
+        }
+
+        /**
+         * Validates the manual helper share number inputs and returns the parsed values.
+         */
+        function validateManualHelperInputs(options = {}) {
+            const quiet = Boolean(options.quiet);
+            if (!manualHelperShareInputsContainer) {
+                if (btnShowMultipliers) btnShowMultipliers.disabled = true;
+                return { ok: false, values: [] };
+            }
+            const inputs = manualHelperShareInputsContainer.querySelectorAll('input');
+            const values = [];
+            const seen = new Set();
+            let errorMessage = '';
+            let hasError = false;
+
+            inputs.forEach((input, index) => {
+                clearInputErrorState(input);
+                const raw = (input.value || '').trim();
+                if (!raw) {
+                    if (!quiet) {
+                        markInputInvalid(input, `Share number ${index + 1} is required.`);
+                        if (!errorMessage) errorMessage = 'Enter all share numbers to continue.';
+                    }
+                    hasError = true;
+                    return;
+                }
+                const numeric = Number(raw);
+                if (!Number.isInteger(numeric) || numeric <= 0 || numeric >= FIELD_PRIME) {
+                    if (!quiet) {
+                        markInputInvalid(input, `Share numbers must be between 1 and ${FIELD_PRIME - 1}.`);
+                        if (!errorMessage) errorMessage = `Share numbers must be between 1 and ${FIELD_PRIME - 1}.`;
+                    }
+                    hasError = true;
+                    return;
+                }
+                if (seen.has(numeric)) {
+                    if (!quiet) {
+                        markInputInvalid(input, 'Share numbers must be unique.');
+                        if (!errorMessage) errorMessage = 'Share numbers must be unique.';
+                    }
+                    hasError = true;
+                    return;
+                }
+                seen.add(numeric);
+                values.push(numeric);
+            });
+
+            if (hasError) {
+                if (!quiet) {
+                    showManualHelperError(errorMessage || 'Fix the highlighted fields before continuing.');
+                } else {
+                    clearManualHelperError();
+                }
+                if (btnShowMultipliers) btnShowMultipliers.disabled = true;
+                return { ok: false, values };
+            }
+
+            clearManualHelperError();
+            if (btnShowMultipliers) btnShowMultipliers.disabled = values.length === 0;
+            return { ok: values.length > 0, values };
+        }
+
+        function resetManualHelperResults() {
+            if (!lagrangeOutputContainer) return;
+            lagrangeOutputContainer.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); margin: 0;">Enter the share numbers above to see the multipliers.</p>';
+        }
+
+        function displayManualHelperResults(shareNumbers, multipliers) {
+            if (!lagrangeOutputContainer) return;
+            lagrangeOutputContainer.innerHTML = '';
+            multipliers.forEach((coef, index) => {
+                const item = document.createElement('div');
+                item.className = 'lagrange-result-item';
+                const label = document.createElement('p');
+                label.innerHTML = `<strong>Share X = ${shareNumbers[index]}</strong>`;
+                const helper = document.createElement('p');
+                helper.textContent = `λ${index + 1}`;
+                const code = document.createElement('code');
+                code.className = 'mono';
+                code.textContent = String(coef).padStart(4, '0');
+                item.appendChild(label);
+                item.appendChild(helper);
+                item.appendChild(code);
+                lagrangeOutputContainer.appendChild(item);
+            });
         }
 
         /**
@@ -2504,10 +2708,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             updateSeedWordInputs();
             updateRecoverSharesInputs();
 
-            if (btnRandomAgain) {
-                btnRandomAgain.addEventListener('click', updateManualHelperDisplay);
-            }
-
             updateOnlineStatus();
             // Set initial theme based on user's system preference
             if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
@@ -2744,6 +2944,40 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     sum = modAdd(sum, term);
                 }
                 return sum;
+            }
+
+            /**
+             * Computes the Lagrange multipliers (λ) for the provided share numbers at X=0.
+             */
+            function computeLagrangeMultipliers(shareNumbers) {
+                if (!Array.isArray(shareNumbers) || shareNumbers.length < 2) {
+                    throw new Error('At least two share numbers are required to compute multipliers.');
+                }
+                const normalized = shareNumbers.map((value, index) => normalizeShareValue(value, `Share number ${index + 1}`));
+                const seen = new Set();
+                normalized.forEach((value) => {
+                    if (value === 0) {
+                        throw new Error('Share numbers cannot be zero.');
+                    }
+                    if (seen.has(value)) {
+                        throw new Error('Share numbers must be unique.');
+                    }
+                    seen.add(value);
+                });
+                const multipliers = [];
+                for (let i = 0; i < normalized.length; i++) {
+                    let numerator = 1;
+                    let denominator = 1;
+                    const xi = mod(normalized[i]);
+                    for (let j = 0; j < normalized.length; j++) {
+                        if (i === j) continue;
+                        const xj = mod(normalized[j]);
+                        numerator = modMul(numerator, mod(FIELD_PRIME - xj));
+                        denominator = modMul(denominator, modSub(xi, xj));
+                    }
+                    multipliers.push(modMul(numerator, modInv(denominator)));
+                }
+                return multipliers;
             }
 
             // ==========================================================================
@@ -3090,7 +3324,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 computeRowChecks,
                 computeMasterCheck,
                 configureEnvironment,
-                getRandomFieldElement // Expose for the manual helper tool
+                getRandomFieldElement, // Expose for the manual helper tool
+                computeLagrangeMultipliers
             };
         })();
 
