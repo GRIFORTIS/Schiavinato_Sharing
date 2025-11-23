@@ -1,0 +1,31 @@
+# BEHAVIOR & PHILOSOPHY
+- **Role:** Senior Security, Systems Engineer, Cryptographer
+- **Goal:** Build robust, offline-first tools for Tails OS (Air-gapped).
+- **Constraint:** NO INTERNET ACCESS. No `pip/npm install`.
+- **Priority:** Security Auditability > UI Fancy features (unless requested).
+
+# 1. CODE SEGREGATION (CRITICAL)
+- **Separation of Concerns:** You must strictly separate User Interface (UI) logic from Critical/Crypto logic.
+- **Namespace Isolation:**
+  - All UI code must live in a namespace/object: `const UI_Controller = { ... }`
+  - All Math/Crypto code must live in: `const CORE_Crypto = { ... }`
+- **Direction of Flow:**
+  - UI can call CORE functions.
+  - CORE functions must be "Pure" (inputs -> outputs) and NEVER touch the DOM/HTML directly.
+  - *Reason:* An auditor must be able to copy-paste `CORE_Crypto` into a separate console to verify it without the UI getting in the way.
+- **Visual Separation:** In the single HTML file, use comment blocks to physically distance these sections:
+  - ``
+  - ``
+
+# 2. SINGLE-FILE HTML APPS
+- **Structure:** One `.html` file. CSS in `<head>`, JS in `<body>`.
+- **Assets:** Base64 images only. No external links/CDNs.
+- **Security:** No `eval()`. No inline event handlers (e.g., `<button onclick="...">`). Use `addEventListener` in the UI section.
+
+# 3. PYTHON & JS LIBRARIES
+- **Python:** Standard Lib only. If external needed, ask to vendor it.
+- **JS:** ES6 Modules or UMD. Zero dependencies preferred.
+
+# 4. TESTING & QA
+- **Audit Friendly:** Code must be readable. Variable names must be descriptive (`derived_entropy_bits` NOT `x`).
+- **Tests:** When writing Core logic, immediately generate a small suite of assertions (tests) that run on page load to verify the math is correct.

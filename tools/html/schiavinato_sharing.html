@@ -586,6 +586,34 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             font-size: 1.1rem;
             padding: 10px;
         }
+        #scheme-explanation {
+            height: 100%;
+            min-height: 360px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        #scheme-explanation ul,
+        #scheme-explanation ol {
+            list-style: none;
+            padding-left: 0;
+            margin-left: 0;
+        }
+        #scheme-explanation li {
+            padding-left: 0;
+            margin-left: 0;
+        }
+        #scheme-explanation h4 {
+            margin-top: 0;
+        }
+        #scheme-explanation > *:last-child {
+            margin-bottom: 0;
+        }
+        @media (max-width: 768px) {
+            #scheme-explanation {
+                min-height: auto;
+            }
+        }
 
 
         /* Custom Modal Styles */
@@ -738,21 +766,21 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             ========================================================================== -->
             <div class="component-card" id="shared-scheme-selector" style="display: none;">
                 <h2>2. Splitting Scheme (Sharding)</h2>
-                <div style="display: flex; gap: 30px;">
+                <div style="display: flex; gap: 30px; align-items: stretch;">
                     <!-- Scheme Radio Buttons -->
                     <div class="form-group" style="flex: 1;">
                         <label>Select scheme</label>
                         <div class="choice-group">
                             <input type="radio" id="scheme-2of3" name="scheme" value="2of3" checked>
-                            <label for="scheme-2of3">2-of-3 (Default)</label>
+                            <label for="scheme-2of3">2-of-3: The Smart Standard</label>
                         </div>
                         <div class="choice-group">
                             <input type="radio" id="scheme-2of4" name="scheme" value="2of4">
-                            <label for="scheme-2of4">2-of-4</label>
+                            <label for="scheme-2of4">2-of-4: The Legacy Protocol</label>
                         </div>
                         <div class="choice-group">
                             <input type="radio" id="scheme-3of5" name="scheme" value="3of5">
-                            <label for="scheme-3of5">3-of-5 (Sovereign)</label>
+                            <label for="scheme-3of5">3-of-5: The Sovereign Fortress</label>
                         </div>
                     </div>
                     <!-- Dynamic Scheme Explanation -->
@@ -895,10 +923,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             </section>
 
             <!-- ==========================================================================
-            PAGE 2.5: MANUAL SHARDING HELPER
-            - A utility to help users with manual, offline sharding calculations.
+            PAGE 2.5A: MANUAL RECOVERY HELPER
             ========================================================================== -->
-            <section id="pageManualHelper" style="display: none;">
+            <section id="pageManualRecovery" style="display: none;">
                 
                 <div class="component-card">
                     <h2>How Lagrange Multipliers Restore Your Wallet</h2>
@@ -908,14 +935,15 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         <li style="margin-bottom: 0.75em;">Use the multipliers to compute <code>Recovered = Σ(Y × λ) mod 2053</code> for each word and checksum row.</li>
                         <li style="margin-bottom: 0.75em;">Repeat for every row and finally verify the master checksum to confirm the recovery.</li>
                     </ol>
+                    <p style="margin-top: 1rem; font-size: 0.95rem; color: var(--text-muted);">After every row, add the three recovered word numbers together and confirm they match the recovered checksum for that row. When you finish all rows, sum every recovered word and verify that it equals the recovered master verification value before rebuilding the mnemonic.</p>
                 </div>
 
                 <div class="component-card">
                     <h2>1. Select Scheme & Share Numbers</h2>
                     <p>Switch between schemes and enter the share numbers (<span class="mono">X</span>) for the shares you currently have. Each share number must be unique.</p>
-                    <div id="manual-helper-scheme-placeholder"></div>
-                    <div class="manual-helper-share-inputs" id="manual-helper-share-inputs"></div>
-                    <div id="manual-helper-error" class="alert alert-error manual-helper-error"></div>
+                    <div id="manual-recovery-scheme-placeholder"></div>
+                    <div class="manual-helper-share-inputs" id="manual-recovery-share-inputs"></div>
+                    <div id="manual-recovery-error" class="alert alert-error manual-helper-error"></div>
                     <div style="text-align: center; margin-top: 20px;">
                         <button id="btn-show-multipliers" class="btn btn-primary" type="button" disabled>Show Multipliers</button>
                     </div>
@@ -924,13 +952,50 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 <div class="component-card" id="manual-helper-results-card">
                     <h2>2. Lagrange Multipliers</h2>
                     <p>Use these multipliers with the corresponding share numbers. They only change if you change the set of shares being combined.</p>
-                    <div id="lagrange-output" class="lagrange-output">
+                    <div id="manual-recovery-output" class="lagrange-output">
                         <p style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); margin: 0;">Enter the share numbers above to see the multipliers.</p>
                     </div>
                 </div>
 
                 <div style="display: flex; justify-content: flex-start; margin-top: 20px;">
                     <button class="btn btn-secondary btn-back-home">Back to Home</button>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+            PAGE 2.5B: MANUAL SHARDING HELPER
+            ========================================================================== -->
+            <section id="pageManualSharding" style="display: none;">
+                
+                <div class="component-card">
+                    <h2>How to Use This Tool</h2>
+                    <p>This tool helps you perform Schiavinato Sharing manually with pencil and paper by providing the necessary secure random numbers.</p>
+                    <ol style="padding-left: 20px; margin-top: 1rem;">
+                        <li style="margin-bottom: 1em;">
+                            <strong>Get your BIP39 word indices:</strong> Find your 12 or 24 secret words on the official BIP39 English wordlist. You need the number (index) for each word. Our tool uses a <strong>zero-indexed</strong> list (the first word, "abandon", is 0). Be careful, as some lists online (like the one on GitHub) show line numbers starting from 1, which will produce incorrect results if used directly. Pro tip: paste the wordlist into a spreadsheet and number it starting from 0.
+                        </li>
+                        <li style="margin-bottom: 1em;">
+                            <strong>Calculate Point Coordinates:</strong> For each of your secret word indices, use the polynomial equation shown above to calculate a "share" value (Y). The 'X' in the equation is the share number (e.g., 1 for the first share, 2 for the second, and so on).
+                        </li>
+                        <li style="margin-bottom: 1em;">
+                            <strong>All calculations are modulo 2053.</strong> This is a prime number. To perform a "modulo" operation, you divide your result by 2053 and take the remainder. For example, <code>2055 mod 2053</code> is <code>2</code>.
+                        </li>
+                    </ol>
+                </div>
+
+                <div id="manual-sharding-scheme-placeholder"></div>
+
+                <div class="component-card">
+                    <h2>2. Polynomial Equation</h2>
+                    <p>This is the equation used to generate your shares. Replace <code>&lt;BIP39 word indices&gt;</code> with your secret numbers (from 0 to 2047).</p>
+                    <div id="polynomial-display" style="background: var(--input-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center; margin-top: 1rem;">
+                        <p style="margin: 0; color: var(--text-muted);">Select a scheme to generate a fresh equation.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button class="btn btn-secondary btn-back-home">Back to Home</button>
+                    <button id="btn-random-again" class="btn btn-primary">Random Again</button>
                 </div>
             </section>
 
@@ -1116,7 +1181,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             recoverFlowCache.push({ shareNumber: '', words: Array(32).fill('') });
         }
         let recoverWordCount = 24;
-        const manualHelperShareCache = {};
+        const manualRecoveryShareCache = {};
 
         let activeSuggestionIndex = -1;
         let allowMouseHover = false;
@@ -1274,7 +1339,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             home: document.getElementById('pageHome'),
             create1: document.getElementById('pageCreate1'),
             create2: document.getElementById('pageCreate2'),
-            manualHelper: document.getElementById('pageManualHelper'),
+            manualRecovery: document.getElementById('pageManualRecovery'),
+            manualSharding: document.getElementById('pageManualSharding'),
             recover1: document.getElementById('pageRecover1'),
             recover2: document.getElementById('pageRecover2'),
         };
@@ -1309,10 +1375,13 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         
         const sharedSchemeSelector = document.getElementById('shared-scheme-selector');
         const createSchemePlaceholder = document.getElementById('create-scheme-placeholder');
-        const manualHelperSchemePlaceholder = document.getElementById('manual-helper-scheme-placeholder');
-        const manualHelperShareInputsContainer = document.getElementById('manual-helper-share-inputs');
-        const manualHelperErrorBox = document.getElementById('manual-helper-error');
-        const lagrangeOutputContainer = document.getElementById('lagrange-output');
+        const manualRecoverySchemePlaceholder = document.getElementById('manual-recovery-scheme-placeholder');
+        const manualShardingSchemePlaceholder = document.getElementById('manual-sharding-scheme-placeholder');
+        const manualRecoveryShareInputsContainer = document.getElementById('manual-recovery-share-inputs');
+        const manualRecoveryErrorBox = document.getElementById('manual-recovery-error');
+        const manualRecoveryOutputContainer = document.getElementById('manual-recovery-output');
+        const polynomialDisplay = document.getElementById('polynomial-display');
+        const btnRandomAgain = document.getElementById('btn-random-again');
 
         const modal = document.getElementById('custom-modal');
         const modalConfirmBtn = document.getElementById('modal-confirm');
@@ -1349,13 +1418,17 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 if (pageKey === 'create1' && createSchemePlaceholder) {
                     createSchemePlaceholder.appendChild(sharedSchemeSelector);
                     sharedSchemeSelector.style.display = 'block';
-                    // Ensure the h2 title inside the card is correct for the flow
                     sharedSchemeSelector.querySelector('h2').textContent = '2. Splitting Scheme (Sharding)';
-                } else if (pageKey === 'manualHelper' && manualHelperSchemePlaceholder) {
-                    manualHelperSchemePlaceholder.appendChild(sharedSchemeSelector);
+                } else if (pageKey === 'manualRecovery' && manualRecoverySchemePlaceholder) {
+                    manualRecoverySchemePlaceholder.appendChild(sharedSchemeSelector);
                     sharedSchemeSelector.style.display = 'block';
                     sharedSchemeSelector.querySelector('h2').textContent = 'Select a Splitting Scheme';
-                    updateManualHelperShareInputs();
+                    updateManualRecoveryShareInputs();
+                } else if (pageKey === 'manualSharding' && manualShardingSchemePlaceholder) {
+                    manualShardingSchemePlaceholder.appendChild(sharedSchemeSelector);
+                    sharedSchemeSelector.style.display = 'block';
+                    sharedSchemeSelector.querySelector('h2').textContent = 'Select a Splitting Scheme';
+                    updateManualShardingEquation();
                 }
             }
             
@@ -1375,10 +1448,10 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         btnGoToCreate.addEventListener('click', () => showPage('create1', 'Create Shares'));
         btnGoToRecover.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
         if (btnManualRecoveryHelper) {
-            btnManualRecoveryHelper.addEventListener('click', () => showPage('manualHelper', 'Manual Recovery Helper'));
+            btnManualRecoveryHelper.addEventListener('click', () => showPage('manualRecovery', 'Manual Recovery Helper'));
         }
         if (btnManualShardingHelper) {
-            btnManualShardingHelper.addEventListener('click', () => showPage('manualHelper', 'Manual Recovery Helper'));
+            btnManualShardingHelper.addEventListener('click', () => showPage('manualSharding', 'Manual Sharding Helper'));
         }
         btnsBackHome.forEach(btn => btn.addEventListener('click', () => showPage('home')));
         
@@ -1581,22 +1654,26 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
         if (btnShowMultipliers) {
             btnShowMultipliers.addEventListener('click', () => {
-                const { ok, values } = validateManualHelperInputs();
+                const { ok, values } = validateManualRecoveryInputs();
                 if (!ok) {
-                    showManualHelperError('Enter valid, unique share numbers to generate multipliers.');
-                    resetManualHelperResults();
+                    showManualRecoveryError('Enter valid, unique share numbers to generate multipliers.');
+                    resetManualRecoveryResults();
                     return;
                 }
                 try {
                     const multipliers = SchiavinatoSharing.computeLagrangeMultipliers(values);
-                    clearManualHelperError();
-                    displayManualHelperResults(values, multipliers);
+                    clearManualRecoveryError();
+                    displayManualRecoveryResults(values, multipliers);
                 } catch (error) {
-                    console.error('Manual helper multiplier error:', error);
-                    showManualHelperError(error.message || 'Could not compute multipliers. Check your inputs and try again.');
-                    resetManualHelperResults();
+                    console.error('Manual recovery multiplier error:', error);
+                    showManualRecoveryError(error.message || 'Could not compute multipliers. Check your inputs and try again.');
+                    resetManualRecoveryResults();
                 }
             });
+        }
+
+        if (btnRandomAgain) {
+            btnRandomAgain.addEventListener('click', updateManualShardingEquation);
         }
 
         /**
@@ -1655,21 +1732,72 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         // ==========================================================================
         // SECTION 4: UI - DYNAMIC CONTENT (CREATE & RECOVER FLOWS)
         // ==========================================================================
-        
+
+        /**
+         * Explanations for the different schemes.
+         */
         const explanations = {
             '2of3': {
-                title: '2-of-3 Scheme (Default)',
-                details: '<p>You will create <strong>3 shares</strong> in total. To recover the wallet, you will need any <strong>2 of them</strong>. This is a common and balanced setup for personal backup.</p>'
+                title: '2-of-3: The Smart Standard',
+                details: `
+                    <p style="margin: 0;"><strong>Best for:</strong> Solo Investors & Personal Backups.</p>
+                    <p style="margin: 0;">The "Golden Ratio" of security. It eliminates single points of failure without overcomplicating your life. If your house burns down, you are safe. If a thief steals one share, they have nothing.</p>
+                    <p style="margin: 0;"><strong>Loss Tolerance:</strong> You can lose up to <strong>1 share</strong>.</p>
+                    <div>
+                        <strong>Typical Setup:</strong>
+                        <ol style="padding-left: 20px">
+                            <li>1. Home Safe (Master Copy)</li>
+                            <li>2. Office Drawer or Hidden at Work</li>
+                            <li>3. Trusted Family Member's House</li>
+                        </ol>
+                        <br>
+                        <br>
+                    </div>`
             },
             '2of4': {
-                title: '2-of-4 Scheme',
-                details: '<p>You will create <strong>4 shares</strong> in total. To recover the wallet, you will need any <strong>2 of them</strong>. This offers more redundancy, allowing for the loss of up to two shares.</p>'
+                title: '2-of-4: The Legacy Protocol',
+                details: `
+                    <p style="margin: 0;"><strong>Best for:</strong> Couples, Families & Inheritance Plans.</p>
+                    <p style="margin: 0;">The ultimate safety net for families. Requiring only half the shares, it maximizes forgiveness for error. It ensures heirs can access funds even if multiple locations are lost or destroyed.</p>
+                    <p style="margin: 0;"><strong>Loss Tolerance:</strong> You can lose up to <strong>2 shares</strong>.</p>
+                    <div>
+                        <strong>Typical Setup:</strong>
+                        <ol style="padding-left: 20px">
+                            <li>1. Your Personal Safe</li>
+                            <li>2. Spouse's Personal Safe</li>
+                            <li>3. Joint Bank Deposit Box</li>
+                            <li>4. Sealed with Family Attorney</li>
+                        </ol>
+                        <br>
+                    </div>`
             },
             '3of5': {
-                title: '3-of-5 Scheme (Sovereign)',
-                details: '<p>You will create <strong>5 shares</strong> in total. To recover the wallet, you will need any <strong>3 of them</strong>. This is highly secure and resilient, ideal for group custody or high-value assets.</p>'
+                title: '3-of-5: The Sovereign Fortress',
+                details: `
+                    <p style="margin: 0;"><strong>Best for:</strong> High Net Worth & Coercion Resistance.</p>
+                    <p style="margin: 0;">The ultimate defense against coercion. Forcing access from three separate locations makes it impossible to surrender funds under duress. Your wealth stays secure even if you are targeted personally.</p>
+                    <p style="margin: 0;"><strong>Loss Tolerance:</strong> You can lose up to <strong>2 shares</strong>.</p>
+                    <div>
+                        <strong>Typical Setup:</strong>
+                        <ol style="padding-left: 20px">
+                            <li>1. Home Safe</li>
+                            <li>2. Bank Deposit Box (City A)</li>
+                            <li>3. Holiday Home or Office (City B)</li>
+                            <li>4. Parents' House / Sibling</li>
+                            <li>5. Private Vault or Attorney</li>
+                        </ol>
+                    </div>`
             }
         };
+
+
+
+
+
+
+
+
+
 
         /**
          * Updates the scheme explanation box based on the selected radio button.
@@ -1677,10 +1805,12 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         function updateSchemeDescription() {
             const selectedValue = document.querySelector('input[name="scheme"]:checked').value;
             const content = explanations[selectedValue];
-            schemeExplanation.innerHTML = `<h4>${content.title}</h4>${content.details}`;
-            // Also update the manual helper display if that page is active
-            if (pages.manualHelper && pages.manualHelper.style.display === 'block') {
-                updateManualHelperShareInputs();
+            schemeExplanation.innerHTML = `${content.details}`;
+            if (pages.manualRecovery && pages.manualRecovery.style.display === 'block') {
+                updateManualRecoveryShareInputs();
+            }
+            if (pages.manualSharding && pages.manualSharding.style.display === 'block') {
+                updateManualShardingEquation();
             }
         }
 
@@ -1699,44 +1829,50 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         }
 
         /**
-         * Ensures we have a cached set of share numbers per scheme for the manual helper.
+         * Ensures we have a cached set of share numbers per scheme for the manual recovery helper.
          */
-        function ensureManualHelperCache(schemeValue, shareCount) {
-            if (!manualHelperShareCache[schemeValue] || manualHelperShareCache[schemeValue].length !== shareCount) {
-                manualHelperShareCache[schemeValue] = Array(shareCount).fill('');
+        function ensureManualRecoveryCache(schemeValue, shareCount) {
+            if (!manualRecoveryShareCache[schemeValue] || manualRecoveryShareCache[schemeValue].length !== shareCount) {
+                manualRecoveryShareCache[schemeValue] = Array(shareCount).fill('');
             }
-            return manualHelperShareCache[schemeValue];
-        }
-
-        function showManualHelperError(message) {
-            if (!manualHelperErrorBox) return;
-            manualHelperErrorBox.style.display = 'block';
-            manualHelperErrorBox.textContent = message;
-        }
-
-        function clearManualHelperError() {
-            if (!manualHelperErrorBox) return;
-            manualHelperErrorBox.style.display = 'none';
-            manualHelperErrorBox.textContent = '';
+            return manualRecoveryShareCache[schemeValue];
         }
 
         /**
-         * Regenerates the share number inputs for the manual helper when the scheme changes.
+         * Displays an inline error message for the manual recovery helper inputs.
          */
-        function updateManualHelperShareInputs() {
-            if (!manualHelperShareInputsContainer) return;
+        function showManualRecoveryError(message) {
+            if (!manualRecoveryErrorBox) return;
+            manualRecoveryErrorBox.style.display = 'block';
+            manualRecoveryErrorBox.textContent = message;
+        }
+
+        /**
+         * Clears any inline error message for the manual recovery helper inputs.
+         */
+        function clearManualRecoveryError() {
+            if (!manualRecoveryErrorBox) return;
+            manualRecoveryErrorBox.style.display = 'none';
+            manualRecoveryErrorBox.textContent = '';
+        }
+
+        /**
+         * Regenerates the share number inputs for the manual recovery helper when the scheme changes.
+         */
+        function updateManualRecoveryShareInputs() {
+            if (!manualRecoveryShareInputsContainer) return;
             const selectedSchemeRadio = document.querySelector('input[name="scheme"]:checked');
             if (!selectedSchemeRadio) return;
             const schemeValue = selectedSchemeRadio.value;
             const { k } = getSchemeThresholds(schemeValue);
-            const cache = ensureManualHelperCache(schemeValue, k);
+            const cache = ensureManualRecoveryCache(schemeValue, k);
 
-            manualHelperShareInputsContainer.innerHTML = '';
+            manualRecoveryShareInputsContainer.innerHTML = '';
             for (let i = 0; i < k; i++) {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'form-group';
                 const label = document.createElement('label');
-                label.htmlFor = `manual-helper-share-${i + 1}`;
+                label.htmlFor = `manual-recovery-share-${i + 1}`;
                 label.textContent = `Share ${i + 1} number`;
                 const input = document.createElement('input');
                 input.type = 'number';
@@ -1750,27 +1886,27 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 input.dataset.allowNumeric = 'true';
                 input.addEventListener('input', (event) => {
                     cache[i] = event.target.value;
-                    validateManualHelperInputs();
+                    validateManualRecoveryInputs();
                 });
                 wrapper.appendChild(label);
                 wrapper.appendChild(input);
-                manualHelperShareInputsContainer.appendChild(wrapper);
+                manualRecoveryShareInputsContainer.appendChild(wrapper);
             }
 
-            validateManualHelperInputs({ quiet: true });
-            resetManualHelperResults();
+            validateManualRecoveryInputs({ quiet: true });
+            resetManualRecoveryResults();
         }
 
         /**
-         * Validates the manual helper share number inputs and returns the parsed values.
+         * Validates the manual recovery helper share numbers and returns the parsed values.
          */
-        function validateManualHelperInputs(options = {}) {
+        function validateManualRecoveryInputs(options = {}) {
             const quiet = Boolean(options.quiet);
-            if (!manualHelperShareInputsContainer) {
+            if (!manualRecoveryShareInputsContainer) {
                 if (btnShowMultipliers) btnShowMultipliers.disabled = true;
                 return { ok: false, values: [] };
             }
-            const inputs = manualHelperShareInputsContainer.querySelectorAll('input');
+            const inputs = manualRecoveryShareInputsContainer.querySelectorAll('input');
             const values = [];
             const seen = new Set();
             let errorMessage = '';
@@ -1810,27 +1946,33 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
             if (hasError) {
                 if (!quiet) {
-                    showManualHelperError(errorMessage || 'Fix the highlighted fields before continuing.');
+                    showManualRecoveryError(errorMessage || 'Fix the highlighted fields before continuing.');
                 } else {
-                    clearManualHelperError();
+                    clearManualRecoveryError();
                 }
                 if (btnShowMultipliers) btnShowMultipliers.disabled = true;
                 return { ok: false, values };
             }
 
-            clearManualHelperError();
+            clearManualRecoveryError();
             if (btnShowMultipliers) btnShowMultipliers.disabled = values.length === 0;
             return { ok: values.length > 0, values };
         }
 
-        function resetManualHelperResults() {
-            if (!lagrangeOutputContainer) return;
-            lagrangeOutputContainer.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); margin: 0;">Enter the share numbers above to see the multipliers.</p>';
+        /**
+         * Restores the default placeholder state for the manual recovery multiplier results.
+         */
+        function resetManualRecoveryResults() {
+            if (!manualRecoveryOutputContainer) return;
+            manualRecoveryOutputContainer.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); margin: 0;">Enter the share numbers above to see the multipliers.</p>';
         }
 
-        function displayManualHelperResults(shareNumbers, multipliers) {
-            if (!lagrangeOutputContainer) return;
-            lagrangeOutputContainer.innerHTML = '';
+        /**
+         * Renders the computed Lagrange multipliers for the manual recovery helper.
+         */
+        function displayManualRecoveryResults(shareNumbers, multipliers) {
+            if (!manualRecoveryOutputContainer) return;
+            manualRecoveryOutputContainer.innerHTML = '';
             multipliers.forEach((coef, index) => {
                 const item = document.createElement('div');
                 item.className = 'lagrange-result-item';
@@ -1844,8 +1986,37 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 item.appendChild(label);
                 item.appendChild(helper);
                 item.appendChild(code);
-                lagrangeOutputContainer.appendChild(item);
+                manualRecoveryOutputContainer.appendChild(item);
             });
+        }
+
+        /**
+         * Generates a fresh polynomial equation for the manual sharding helper using random coefficients.
+         */
+        function updateManualShardingEquation() {
+            if (!polynomialDisplay) return;
+            const selectedSchemeRadio = document.querySelector('input[name="scheme"]:checked');
+            if (!selectedSchemeRadio) return;
+            const schemeValue = selectedSchemeRadio.value;
+            const { k } = getSchemeThresholds(schemeValue);
+            const degree = Math.max(1, k - 1);
+            const coefficients = [];
+            const placeholder = '<strong class="mono" style="color: var(--cyber-gold);">&lt;BIP39 word indices&gt;</strong>';
+            try {
+                for (let i = 0; i < degree; i++) {
+                    coefficients.push(SchiavinatoSharing.getRandomFieldElement());
+                }
+                let equation = `f(X) = ${placeholder}`;
+                coefficients.forEach((coef, index) => {
+                    const exponent = index + 1;
+                    const power = exponent === 1 ? 'X' : `X<sup>${exponent}</sup>`;
+                    equation += ` + ${coef} * ${power}`;
+                });
+                polynomialDisplay.innerHTML = `<code class="mono" style="font-size: 1.1rem; word-wrap: break-word;">${equation}</code>`;
+            } catch (error) {
+                polynomialDisplay.innerHTML = `<span style="color: var(--error-red);">Error: Could not generate secure random numbers.</span>`;
+                console.error('Manual sharding helper error:', error);
+            }
         }
 
         /**
@@ -2474,7 +2645,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                             <strong>Final Master Verification:</strong> After all rows are recovered and verified, use the same method from step 2 to recover the "Master Verification Number" from the share headers. Then, add all 24 of your recovered word numbers together (modulo 2053). The result MUST equal the recovered Master Verification Number. If it doesn't, an error exists in one or more rows.
                         </li>
                         <li style="margin-bottom: 0.5em;">
-                            <strong>Convert to Words:</strong> Once all checks pass, use the standard BIP39 wordlist to look up the word for each of your 24 recovered numbers. The resulting sequence of 24 words is your wallet's original recovery phrase.
+                            <strong>Convert to Words:</strong> Once all checks pass, use the standard BIP39 wordlist to look up the word for each of your 12-24 recovered numbers. The resulting sequence of 12-24 words is your wallet's original recovery phrase.
                         </li>
                     </ol>
                 </div>

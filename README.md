@@ -18,10 +18,10 @@ The goal of this project is to document and provide reference material for a sec
 - `CONTRIBUTING.md` – guidelines for suggesting changes, reference implementations, and reviews.
 - `SECURITY.md` – how to report vulnerabilities or subtle failure modes responsibly.
 - `LICENSE` and `LICENSE-WHITEPAPER.md` – licensing terms for code and the whitepaper, respectively.
-- `tools/html/` – planned self-contained HTML/JavaScript reference tool for sharding and recovery.
+- `tools/html/` – self-contained HTML/JavaScript reference tool for sharding and recovery (available now).
 - `tools/python/` – planned Python reference library implementing the Schiavinato Sharing scheme.
 
-Additional resources (including the HTML tool, Python library, and further examples) will be added to this repository over time.
+The HTML tool is currently available for testing and review. Additional resources (including the Python library and further examples) will be added to this repository over time.
 
 ---
 
