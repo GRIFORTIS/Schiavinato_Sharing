@@ -1,5 +1,5 @@
 ## Schiavinato Sharing: Human-Executable Secret Sharing for BIP39 Mnemonics
-## A Pencil-and-Paper Arithmetic Scheme for Inheritance and Disaster Recovery
+A Pencil-and-Paper Arithmetic Scheme for Inheritance and Disaster Recovery
 
 This repository hosts the whitepaper:
 
