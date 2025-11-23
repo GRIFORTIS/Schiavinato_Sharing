@@ -287,34 +287,62 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         
         /* --- 8. BUTTONS (ACTIONS) --- */
         .btn {
-            width: auto; padding: 12px 24px; border-radius: 6px;
-            /* Buttons use bold system font for strong visual hierarchy */
+            width: auto;
+            padding: 12px 24px;
+            border-radius: 10px;
+            border: 1px solid transparent;
+            background-color: transparent;
+            color: var(--text-main);
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            font-weight: 800; font-size: 0.9rem;
-            text-transform: uppercase; cursor: pointer; border: none;
-            transition: all 0.2s; margin: 5px;
+            font-weight: 800;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin: 5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 0 0 rgba(0, 0, 0, 0);
         }
-        /* Primary button (gold) */
-        .btn-primary {
-            background-color: var(--cyber-gold);
-            color: #000;
-            box-shadow: 0 4px 15px rgba(244, 180, 0, 0.2);
-        }
-        .btn-primary:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.1); }
-        .btn-primary:disabled {
-            background-color: var(--btn-disabled-bg);
-            color: var(--btn-disabled-text);
+        .btn:disabled {
+            border: 1px solid var(--border-color);
+            background-color: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
             cursor: not-allowed;
             box-shadow: none;
+            transform: none;
+            pointer-events: none;
+            filter: none;
         }
-        /* Secondary button (ghost / cancel) */
+        /* Style 2 – Secondary / Unselected */
         .btn-secondary {
-            background-color: transparent;
-            border: 1px solid var(--btn-cancel-border);
-            color: var(--text-muted);
-            font-weight: 700;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(244, 180, 0, 0.25);
+            color: var(--text-main);
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
         }
-        .btn-secondary:hover { border-color: var(--text-main); color: var(--text-main); }
+        .btn-secondary:not(:disabled):hover,
+        .btn-secondary:not(:disabled):focus-visible {
+            border-color: var(--cyber-gold);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+            transform: translateY(-2px);
+        }
+        /* Style 3 – CTA / Selected */
+        .btn-primary {
+            border: 1px solid var(--cyber-gold);
+            background-color: var(--cyber-gold);
+            color: #000;
+            box-shadow: 0 6px 20px rgba(244, 180, 0, 0.35);
+        }
+        .btn-primary:not(:disabled):hover,
+        .btn-primary:not(:disabled):focus-visible {
+            filter: brightness(1.02);
+            border-color: #ffd866;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 24px rgba(244, 180, 0, 0.45);
+        }
         
         /* --- 9. MESSAGES & ALERTS --- */
         .alert {
@@ -485,6 +513,16 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             margin: 0;
         }
 
+        .home-button:disabled {
+            background-color: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+        .home-button:disabled:hover { border-color: var(--border-color); }
+
         /* Recover Page Styles */
         .horizontal-radio-group {
             display: flex;
@@ -503,6 +541,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             margin-bottom: 1.5rem;
             font-size: 1.25rem;
         }
+
 
         /* Custom Modal Styles */
         .modal-overlay {
@@ -648,6 +687,37 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             <h2 id="flow-subheader" class="flow-subheader" style="display: none;"></h2>
 
             <!-- ==========================================================================
+            SHARED COMPONENT: SCHEME SELECTOR
+            - This component is moved out of pageCreate1 to be reused.
+            - It is dynamically appended into the correct page by the showPage() function.
+            ========================================================================== -->
+            <div class="component-card" id="shared-scheme-selector" style="display: none;">
+                <h2>2. Splitting Scheme (Sharding)</h2>
+                <div style="display: flex; gap: 30px;">
+                    <!-- Scheme Radio Buttons -->
+                    <div class="form-group" style="flex: 1;">
+                        <label>Select scheme</label>
+                        <div class="choice-group">
+                            <input type="radio" id="scheme-2of3" name="scheme" value="2of3" checked>
+                            <label for="scheme-2of3">2-of-3 (Default)</label>
+                        </div>
+                        <div class="choice-group">
+                            <input type="radio" id="scheme-2of4" name="scheme" value="2of4">
+                            <label for="scheme-2of4">2-of-4</label>
+                        </div>
+                        <div class="choice-group">
+                            <input type="radio" id="scheme-3of5" name="scheme" value="3of5">
+                            <label for="scheme-3of5">3-of-5 (Sovereign)</label>
+                        </div>
+                    </div>
+                    <!-- Dynamic Scheme Explanation -->
+                    <div id="scheme-explanation" style="flex: 2; background: var(--input-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <!-- Explanation is dynamically inserted here by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==========================================================================
             PAGE 0: HOME
             - The main entry point of the application.
             - Provides navigation to the two primary flows: Create and Recover.
@@ -655,11 +725,22 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             <section id="pageHome" style="display: none;">
                 <button class="home-button" id="btn-go-to-recover">
                     <h2>Recover Wallet</h2>
-                    <p>Enter the data from the shares and recover the wallet</p>
+                    <p>Enter your share data to recover the original seed phrase</p>
                 </button>
+                <button class="home-button" id="btn-manual-recovery-helper" disabled>
+                    <h2>Manual Recovery Helper</h2>
+                    <p>Step-by-step guide for pencil & paper recovery (soon)</p>
+                </button>
+
+                <hr style="margin: 30px 0;">
+
                 <button class="home-button" id="btn-go-to-create">
                     <h2>Create Shares</h2>
-                    <p>Enter the data from the wallet and create the shares</p>
+                    <p>Split your seed phrase into multiple secure shares</p>
+                </button>
+                <button class="home-button" id="btn-manual-sharding-helper">
+                    <h2>Manual Sharding Helper</h2>
+                    <p>Generate secure random numbers for pencil & paper sharding</p>
                 </button>
             </section>
             
@@ -687,32 +768,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     </div>
                 </div>
 
-                <!-- Section 1.2: Sharding Scheme Selection -->
-                <div class="component-card">
-                    <h2>2. Splitting Scheme (Sharding)</h2>
-                    <div style="display: flex; gap: 30px;">
-                        <!-- Scheme Radio Buttons -->
-                        <div class="form-group" style="flex: 1;">
-                            <label>Select scheme</label>
-                            <div class="choice-group">
-                                <input type="radio" id="scheme-2of3" name="scheme" value="2of3" checked>
-                                <label for="scheme-2of3">2-of-3 (Default)</label>
-                            </div>
-                            <div class="choice-group">
-                                <input type="radio" id="scheme-2of4" name="scheme" value="2of4">
-                                <label for="scheme-2of4">2-of-4</label>
-                            </div>
-                            <div class="choice-group">
-                                <input type="radio" id="scheme-3of5" name="scheme" value="3of5">
-                                <label for="scheme-3of5">3-of-5 (Sovereign)</label>
-                            </div>
-                        </div>
-                        <!-- Dynamic Scheme Explanation -->
-                        <div id="scheme-explanation" style="flex: 2; background: var(--input-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
-                            <!-- Explanation is dynamically inserted here by JS -->
-                        </div>
-                    </div>
-                </div>
+                <!-- Section 1.2: Sharding Scheme Selection Placeholder -->
+                <div id="create-scheme-placeholder"></div>
 
                 <!-- Section 1.3: Seed Phrase Input -->
                 <div class="component-card">
@@ -750,7 +807,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         <strong>ATTENTION:</strong> This data will not be saved. After closing this page, it will be gone forever. Double-check everything before you leave.
                     </div>
                     <div style="text-align: center; margin-top: 20px;">
-                        <button id="btn-print-shares" class="btn btn-primary" type="button">🖨️ Print Shares</button>
+                        <button id="btn-print-shares" class="btn btn-primary" type="button" disabled title="Printing will be available soon">🖨️ Print Shares</button>
                     </div>
                 </div>
 
@@ -789,6 +846,48 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 <div style="display: flex; justify-content: space-between; margin-top: 20px;">
                     <button id="btn-back-to-create1" class="btn btn-secondary">← Go Back and Edit</button>
                     <button id="btn-start-over-create" class="btn btn-primary">Clear All & Start Over</button>
+                </div>
+            </section>
+
+            <!-- ==========================================================================
+            PAGE 2.5: MANUAL SHARDING HELPER
+            - A utility to help users with manual, offline sharding calculations.
+            ========================================================================== -->
+            <section id="pageManualHelper" style="display: none;">
+                
+                <!-- Instructions for Manual Use -->
+                <div class="component-card">
+                    <h2>How to Use This Tool</h2>
+                    <p>This tool helps you perform Schiavinato Sharing manually with pencil and paper by providing the necessary secure random numbers.</p>
+                    <ol style="padding-left: 20px; margin-top: 1rem;">
+                        <li style="margin-bottom: 1em;">
+                            <strong>Get your BIP39 word indices:</strong> Find your 12 or 24 secret words on the official BIP39 English wordlist. You need the number (index) for each word. Our tool uses a <strong>zero-indexed</strong> list (the first word, "abandon", is 0). Be careful, as some lists online (like the one on GitHub) show line numbers starting from 1, which will produce incorrect results if used directly. A Pro tip is to copy and paste the wordlist into a spreadsheet and number it starting from 0.
+                        </li>
+                        <li style="margin-bottom: 1em;">
+                            <strong>Calculate Point Coordinates:</strong> For each of your secret word indices, use the polynomial equation shown above to calculate a "share" value (Y). The 'X' in the equation is the share number (e.g., 1 for the first share, 2 for the second, and so on).
+                        </li>
+                        <li style="margin-bottom: 1em;">
+                            <strong>All calculations are modulo 2053.</strong> This is a prime number. To perform a "modulo" operation, you divide your result by 2053 and take the remainder. For example, <code>2055 mod 2053</code> is <code>2</code>.
+                        </li>
+                    </ol>
+                </div>
+
+                <!-- Placeholder for the shared sharding scheme selector -->
+                <div id="manual-helper-scheme-placeholder"></div>
+
+                <!-- Polynomial Equation Display -->
+                <div class="component-card">
+                    <h2>2. Polynomial Equation</h2>
+                    <p>This is the equation used to generate your shares. Replace <code>&lt;BIP39 word indices&gt;</code> with your secret numbers (from 0 to 2047).</p>
+                    <div id="polynomial-display" style="background: var(--input-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center; margin-top: 1rem;">
+                        <!-- Equation will be dynamically inserted here by JS -->
+                    </div>
+                </div>
+
+                <!-- Page Footer Buttons -->
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button class="btn btn-secondary btn-back-home">Back to Home</button>
+                    <button id="btn-random-again" class="btn btn-primary">Random Again</button>
                 </div>
             </section>
 
@@ -852,7 +951,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         <strong>SUCCESS:</strong> The original seed phrase has been recovered.
                     </div>
                     <div style="text-align: center; margin-top: 20px;">
-                        <button id="btn-print-recovered" class="btn btn-primary" type="button">🖨️ Print Recovered Seed</button>
+                        <button id="btn-print-recovered" class="btn btn-primary" type="button" disabled title="Printing will be available soon">🖨️ Print Recovered Seed</button>
                     </div>
                 </div>
 
@@ -1131,6 +1230,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             home: document.getElementById('pageHome'),
             create1: document.getElementById('pageCreate1'),
             create2: document.getElementById('pageCreate2'),
+            manualHelper: document.getElementById('pageManualHelper'),
             recover1: document.getElementById('pageRecover1'),
             recover2: document.getElementById('pageRecover2'),
         };
@@ -1141,6 +1241,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
         const btnGoToCreate = document.getElementById('btn-go-to-create');
         const btnGoToRecover = document.getElementById('btn-go-to-recover');
+        const btnManualShardingHelper = document.getElementById('btn-manual-sharding-helper');
         const btnsBackHome = document.querySelectorAll('.btn-back-home');
         const btnGenerateShares = document.getElementById('btn-generate-shares');
         const btnBackToCreate1 = document.getElementById('btn-back-to-create1');
@@ -1148,6 +1249,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         const btnRecoverWallet = document.getElementById('btn-recover-wallet');
         const btnStartOverRecover = document.getElementById('btn-start-over-recover');
         const btnBackToRecover1 = document.getElementById('btn-back-to-recover1');
+        const btnRandomAgain = document.getElementById('btn-random-again');
 
         const schemeRadios = document.querySelectorAll('input[name="scheme"]');
         const schemeExplanation = document.getElementById('scheme-explanation');
@@ -1160,6 +1262,11 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         const recoverBtn12Words = document.getElementById('recover-btn-12-words');
         const recoverBtn24Words = document.getElementById('recover-btn-24-words');
         
+        const polynomialDisplay = document.getElementById('polynomial-display');
+        const sharedSchemeSelector = document.getElementById('shared-scheme-selector');
+        const createSchemePlaceholder = document.getElementById('create-scheme-placeholder');
+        const manualHelperSchemePlaceholder = document.getElementById('manual-helper-scheme-placeholder');
+
         const modal = document.getElementById('custom-modal');
         const modalConfirmBtn = document.getElementById('modal-confirm');
         const modalCancelBtn = document.getElementById('modal-cancel');
@@ -1184,6 +1291,27 @@ TERMS OF USE & LIABILITY DISCLAIMER:
          */
         function showPage(pageKey, subheaderText = '') {
             Object.values(pages).forEach(page => page.style.display = 'none');
+
+            // Hide the shared component by default. It will be shown if its new parent page is activated.
+            if (sharedSchemeSelector) {
+                sharedSchemeSelector.style.display = 'none';
+            }
+
+            // Attach the shared component to the correct placeholder if the new page needs it
+            if (sharedSchemeSelector) {
+                if (pageKey === 'create1' && createSchemePlaceholder) {
+                    createSchemePlaceholder.appendChild(sharedSchemeSelector);
+                    sharedSchemeSelector.style.display = 'block';
+                    // Ensure the h2 title inside the card is correct for the flow
+                    sharedSchemeSelector.querySelector('h2').textContent = '2. Splitting Scheme (Sharding)';
+                } else if (pageKey === 'manualHelper' && manualHelperSchemePlaceholder) {
+                    manualHelperSchemePlaceholder.appendChild(sharedSchemeSelector);
+                    sharedSchemeSelector.style.display = 'block';
+                    sharedSchemeSelector.querySelector('h2').textContent = '1. Splitting Scheme (Sharding)';
+                    updateManualHelperDisplay(); // Initial call to populate the display
+                }
+            }
+            
             pages[pageKey].style.display = 'block';
 
             if (subheaderText) {
@@ -1199,6 +1327,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         btnContinueToHome.addEventListener('click', () => showPage('home'));
         btnGoToCreate.addEventListener('click', () => showPage('create1', 'Create Shares'));
         btnGoToRecover.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
+        btnManualShardingHelper.addEventListener('click', () => showPage('manualHelper', 'Manual Sharding Helper'));
         btnsBackHome.forEach(btn => btn.addEventListener('click', () => showPage('home')));
         
         btnGenerateShares.addEventListener('click', async () => {
@@ -1239,7 +1368,15 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             }
         });
         
-        btnBackToCreate1.addEventListener('click', () => showPage('create1', 'Create Shares'));
+        btnBackToCreate1.addEventListener('click', async () => {
+            const confirmed = await showConfirmationModal(
+                'Regenerate Shares?',
+                'Returning to step 1 will discard these shares and create a completely new set. If you already started copying, the new shares will not match. Do you still want to go back?'
+            );
+            if (confirmed) {
+                showPage('create1', 'Create Shares');
+            }
+        });
         btnBackToRecover1.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
 
         btnRecoverWallet.addEventListener('click', async () => {
@@ -1469,6 +1606,42 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             const selectedValue = document.querySelector('input[name="scheme"]:checked').value;
             const content = explanations[selectedValue];
             schemeExplanation.innerHTML = `<h4>${content.title}</h4>${content.details}`;
+            // Also update the manual helper display if that page is active
+            if(pages.manualHelper.style.display === 'block') {
+                updateManualHelperDisplay();
+            }
+        }
+
+        /**
+         * Updates the display of the Manual Sharding Helper page with a new equation.
+         */
+        function updateManualHelperDisplay() {
+            if (!polynomialDisplay) return;
+
+            const selectedScheme = document.querySelector('input[name="scheme"]:checked').value;
+            // The <strong> tag here is more semantic for emphasizing the placeholder text
+            const s = '<strong class="mono" style="color: var(--cyber-gold);">&lt;BIP39 word indices&gt;</strong>';
+            let equation = '';
+
+            try {
+                if (selectedScheme === '2of3' || selectedScheme === '2of4') {
+                    // For a 2-of-N scheme, the polynomial is degree 1 (k-1)
+                    // f(X) = secret + r1 * X
+                    const r1 = SchiavinatoSharing.getRandomFieldElement();
+                    equation = `f(X) = ${s} + ${r1} * X`;
+                } else if (selectedScheme === '3of5') {
+                    // For a 3-of-5 scheme, the polynomial is degree 2 (k-1)
+                    // f(X) = secret + r1 * X + r2 * X^2
+                    const r1 = SchiavinatoSharing.getRandomFieldElement();
+                    const r2 = SchiavinatoSharing.getRandomFieldElement();
+                    equation = `f(X) = ${s} + ${r1} * X + ${r2} * X²`;
+                }
+                polynomialDisplay.innerHTML = `<code class="mono" style="font-size: 1.1rem; word-wrap: break-word;">${equation}</code>`;
+            } catch (error) {
+                // Display an error if the crypto API fails for some reason
+                polynomialDisplay.innerHTML = `<span style="color: var(--error-red);">Error: Could not generate secure random numbers.</span>`;
+                console.error("Manual helper error:", error);
+            }
         }
 
         /**
@@ -2331,6 +2504,10 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             updateSeedWordInputs();
             updateRecoverSharesInputs();
 
+            if (btnRandomAgain) {
+                btnRandomAgain.addEventListener('click', updateManualHelperDisplay);
+            }
+
             updateOnlineStatus();
             // Set initial theme based on user's system preference
             if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
@@ -2912,7 +3089,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 validateBIP39Mnemonic,
                 computeRowChecks,
                 computeMasterCheck,
-                configureEnvironment
+                configureEnvironment,
+                getRandomFieldElement // Expose for the manual helper tool
             };
         })();
 
