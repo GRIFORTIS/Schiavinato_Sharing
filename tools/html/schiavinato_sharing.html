@@ -603,7 +603,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 <h1>Schiavinato Sharing</h1>
                 <div id="connection-status" class="connection-status"></div>
             </div>
-            <button class="theme-toggle" onclick="toggleTheme()">
+            <button id="theme-toggle-btn" class="theme-toggle">
                 <span id="toggle-icon">☀️</span> <span id="toggle-text">Light Mode</span>
             </button>
         </header>
@@ -750,7 +750,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         <strong>ATTENTION:</strong> This data will not be saved. After closing this page, it will be gone forever. Double-check everything before you leave.
                     </div>
                     <div style="text-align: center; margin-top: 20px;">
-                        <button class="btn btn-primary" onclick="window.print()">🖨️ Print Shares</button>
+                        <button id="btn-print-shares" class="btn btn-primary" type="button">🖨️ Print Shares</button>
                     </div>
                 </div>
 
@@ -852,7 +852,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         <strong>SUCCESS:</strong> The original seed phrase has been recovered.
                     </div>
                     <div style="text-align: center; margin-top: 20px;">
-                        <button class="btn btn-primary" onclick="window.print()">🖨️ Print Recovered Seed</button>
+                        <button id="btn-print-recovered" class="btn btn-primary" type="button">🖨️ Print Recovered Seed</button>
                     </div>
                 </div>
 
@@ -1168,6 +1168,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         
         const connectionStatusEl = document.getElementById('connection-status');
         const autocompleteContainer = document.getElementById('autocomplete-suggestions');
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const btnPrintShares = document.getElementById('btn-print-shares');
+        const btnPrintRecovered = document.getElementById('btn-print-recovered');
 
         // ==========================================================================
         // SECTION 3: UI - PAGE NAVIGATION
@@ -1436,34 +1439,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             }
         }
         
-        /*
-         * findInvalidShareRows is intentionally disabled for now because it depends on crypto
-         * helpers that are not exposed in this UI scope. Keeping the original implementation
-         * here makes it easy to re-enable once the helper is properly wired.
-         *
-         * function findInvalidShareRows(shares, targetRowIndex = null) {
-         *     if (!Array.isArray(shares)) return [];
-         *     const invalid = [];
-         *     shares.forEach(share => {
-         *         if (!share || !Array.isArray(share.wordShares) || !Array.isArray(share.checksumShares)) return;
-         *         const rowCount = share.checksumShares.length;
-         *         for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-         *             if (targetRowIndex !== null && rowIndex !== targetRowIndex) continue;
-         *             const base = rowIndex * WORDS_PER_ROW;
-         *             const computedChecksum = modAdd(
-         *                 modAdd(share.wordShares[base], share.wordShares[base + 1]),
-         *                 share.wordShares[base + 2]
-         *             );
-         *             if (computedChecksum !== share.checksumShares[rowIndex]) {
-         *                 invalid.push({ shareNumber: share.shareNumber, rowIndex });
-         *             }
-         *         }
-         *     });
-         *     return invalid;
-         * }
-         */
-
-
         disclaimerCheckbox.addEventListener('change', () => {
             btnContinueToHome.disabled = !disclaimerCheckbox.checked;
         });
@@ -1525,6 +1500,12 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 row.appendChild(label);
                 row.appendChild(input);
                 seedWordInputsContainer.appendChild(row);
+            }
+
+            const wordInputs = seedWordInputsContainer.querySelectorAll('input');
+            if (wordInputs.length > 0) {
+                const lastWordInput = wordInputs[wordInputs.length - 1];
+                attachTabAdvance(lastWordInput, btnGenerateShares);
             }
         }
         
@@ -1691,6 +1672,12 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 const shareInputBlock = generateSingleRecoverShareInput(i);
                 recoverSharesContainer.appendChild(shareInputBlock);
             }
+
+            const recoverWordInputs = recoverSharesContainer.querySelectorAll('.seed-word-row input');
+            if (recoverWordInputs.length > 0) {
+                const lastRecoverWordInput = recoverWordInputs[recoverWordInputs.length - 1];
+                attachTabAdvance(lastRecoverWordInput, btnRecoverWallet);
+            }
         }
 
         recoverKRadios.forEach(radio => radio.addEventListener('change', updateRecoverSharesInputs));
@@ -1712,6 +1699,27 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             });
             input.addEventListener('keydown', handleAutocompleteKeydown);
             attachValidationListener(input); // Also attach the blur validation
+        }
+
+        /**
+         * Forces the Tab key on the provided input to focus the supplied target element.
+         * @param {HTMLInputElement} input
+         * @param {HTMLElement} targetElement
+         */
+        function attachTabAdvance(input, targetElement) {
+            if (!input || !targetElement) return;
+            input.addEventListener('keydown', (event) => {
+                if (
+                    event.key === 'Tab' &&
+                    !event.shiftKey &&
+                    !event.altKey &&
+                    !event.ctrlKey &&
+                    !event.metaKey
+                ) {
+                    event.preventDefault();
+                    targetElement.focus();
+                }
+            });
         }
 
         /**
@@ -2246,6 +2254,16 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         // SECTION 7: UI - EVENT LISTENERS & INITIALIZATION
         // ==========================================================================
         
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', toggleTheme);
+        }
+        if (btnPrintShares) {
+            btnPrintShares.addEventListener('click', () => window.print());
+        }
+        if (btnPrintRecovered) {
+            btnPrintRecovered.addEventListener('click', () => window.print());
+        }
+        
         /**
          * Sets up the event listeners and class toggling for a pair of 12/24 word buttons.
          * @param {HTMLButtonElement} btn12 - The 12-words button.
@@ -2374,6 +2392,37 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             const FIELD_PRIME = 2053;
             const WORDS_PER_ROW = 3;
 
+            const GLOBAL_SCOPE = typeof globalThis !== 'undefined'
+                ? globalThis
+                : (typeof self !== 'undefined' ? self : (typeof window !== 'undefined' ? window : {}));
+            let randomSource = (GLOBAL_SCOPE.crypto && typeof GLOBAL_SCOPE.crypto.getRandomValues === 'function')
+                ? GLOBAL_SCOPE.crypto
+                : null;
+            let sha256Impl = (typeof GLOBAL_SCOPE.sha256 === 'function') ? GLOBAL_SCOPE.sha256 : null;
+
+            /**
+             * Allows callers to override the randomness provider and/or SHA-256 implementation.
+             * Useful for non-browser environments or deterministic tests.
+             * @param {Object} [options]
+             * @param {{getRandomValues: function(Uint32Array): void}} [options.randomSource]
+             * @param {Function} [options.sha256]
+             */
+            function configureEnvironment(options = {}) {
+                const { randomSource: newRandomSource, sha256: newSha256 } = options;
+                if (newRandomSource !== undefined) {
+                    if (!newRandomSource || typeof newRandomSource.getRandomValues !== 'function') {
+                        throw new Error('randomSource must expose getRandomValues(Uint32Array).');
+                    }
+                    randomSource = newRandomSource;
+                }
+                if (newSha256 !== undefined) {
+                    if (typeof newSha256 !== 'function' || typeof newSha256.arrayBuffer !== 'function') {
+                        throw new Error('sha256 must have a callable arrayBuffer(message) helper.');
+                    }
+                    sha256Impl = newSha256;
+                }
+            }
+
             // ==========================================================================
             // CORE GALOIS FIELD (GF(2053)) ARITHMETIC
             // ==========================================================================
@@ -2439,8 +2488,13 @@ TERMS OF USE & LIABILITY DISCLAIMER:
              * Returns a uniform random integer in [0, max] using window.crypto entropy.
              */
             function getRandomIntInclusive(max) {
-                if (!window.crypto || !window.crypto.getRandomValues) {
-                    throw new Error('Secure randomness (window.crypto.getRandomValues) is required.');
+                if (!randomSource || typeof randomSource.getRandomValues !== 'function') {
+                    const fallback = GLOBAL_SCOPE.crypto;
+                    if (fallback && typeof fallback.getRandomValues === 'function') {
+                        randomSource = fallback;
+                    } else {
+                        throw new Error('Secure randomness provider is not configured.');
+                    }
                 }
                 const range = max + 1;
                 if (range <= 0) {
@@ -2451,7 +2505,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 const buffer = new Uint32Array(1);
                 let value;
                 do {
-                    window.crypto.getRandomValues(buffer);
+                    randomSource.getRandomValues(buffer);
                     value = buffer[0];
                 } while (value >= limit);
                 return value % range;
@@ -2623,10 +2677,15 @@ TERMS OF USE & LIABILITY DISCLAIMER:
              * Hashes the provided data using the embedded SHA-256 implementation.
              */
             async function computeSha256(data) {
-                if (typeof sha256 !== 'function' || typeof sha256.arrayBuffer !== 'function') {
-                    throw new Error('Embedded SHA-256 implementation is not available.');
+                if (!sha256Impl || typeof sha256Impl.arrayBuffer !== 'function') {
+                    const fallback = GLOBAL_SCOPE.sha256;
+                    if (typeof fallback === 'function' && typeof fallback.arrayBuffer === 'function') {
+                        sha256Impl = fallback;
+                    } else {
+                        throw new Error('SHA-256 implementation is not configured.');
+                    }
                 }
-                return new Uint8Array(sha256.arrayBuffer(data));
+                return new Uint8Array(sha256Impl.arrayBuffer(data));
             }
 
             /**
@@ -2852,7 +2911,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 recoverAndValidate,
                 validateBIP39Mnemonic,
                 computeRowChecks,
-                computeMasterCheck
+                computeMasterCheck,
+                configureEnvironment
             };
         })();
 

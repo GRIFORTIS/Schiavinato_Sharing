@@ -1,8 +1,9 @@
-## Schiavinato Sharing – BIP39 Mnemonic Sharing Scheme
+## Schiavinato Sharing: Human-Executable Secret Sharing for BIP39 Mnemonics
 
 This repository hosts the whitepaper:
 
 > **“Schiavinato Sharing: Human-Executable Secret Sharing for BIP39 Mnemonics”**
+> **“A Pencil-and-Paper Arithmetic Scheme for Inheritance and Disaster Recovery”**
 
 - **[`GRIFORTIS/Schiavinato_Sharing/WHITEPAPER.md`](https://github.com/GRIFORTIS/Schiavinato_Sharing/blob/main/WHITEPAPER.md)**
 
