@@ -2972,6 +2972,57 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             }
 
             // ==========================================================================
+            // SECURITY UTILITIES
+            // ==========================================================================
+            /**
+             * Constant-time equality comparison for field elements.
+             * Prevents timing attacks by avoiding early exit on mismatch.
+             * Uses bitwise XOR to compare values without branching on bit differences.
+             * @param {number} a - First value to compare
+             * @param {number} b - Second value to compare
+             * @returns {boolean} true if values are equal, false otherwise
+             */
+            function constantTimeEqual(a, b) {
+                const diff = a ^ b;
+                return diff === 0;
+            }
+
+            /**
+             * Constant-time string equality comparison.
+             * Compares strings character by character without early exit,
+             * preventing timing attacks on string comparisons (e.g., BIP39 checksums).
+             * @param {string} a - First string to compare
+             * @param {string} b - Second string to compare
+             * @returns {boolean} true if strings are equal, false otherwise
+             */
+            function constantTimeStringEqual(a, b) {
+                const maxLen = Math.max(a.length, b.length);
+                let diff = a.length ^ b.length;
+                
+                for (let i = 0; i < maxLen; i++) {
+                    const charA = i < a.length ? a.charCodeAt(i) : 0;
+                    const charB = i < b.length ? b.charCodeAt(i) : 0;
+                    diff |= charA ^ charB;
+                }
+                
+                return diff === 0;
+            }
+
+            /**
+             * Securely overwrites an array with zeros.
+             * Reduces the window of vulnerability to memory dump attacks by
+             * explicitly clearing sensitive data instead of relying on garbage collection.
+             * @param {Array} arr - Array to wipe (will be modified in place)
+             */
+            function secureWipeArray(arr) {
+                if (Array.isArray(arr)) {
+                    for (let i = 0; i < arr.length; i++) {
+                        arr[i] = 0;
+                    }
+                }
+            }
+
+            // ==========================================================================
             // CORE GALOIS FIELD (GF(2053)) ARITHMETIC
             // ==========================================================================
             /**
@@ -3299,7 +3350,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 const hashBytes = await computeSha256(entropyBytes);
                 const hashBinary = bytesToBinary(hashBytes);
                 const derivedChecksum = hashBinary.substring(0, checksumLength);
-                if (derivedChecksum !== checksumBinary) {
+                // Use constant-time comparison to prevent timing attacks
+                if (!constantTimeStringEqual(derivedChecksum, checksumBinary)) {
                     throw new Error('Mnemonic checksum is invalid.');
                 }
                 return true;
@@ -3361,24 +3413,33 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 // --- TEMPORARY DEBUG END ---
                 
                 const shares = [];
-                for (let shareIndex = 1; shareIndex <= n; shareIndex++) {
-                    const share = {
-                        shareNumber: shareIndex,
-                        wordShares: [],
-                        checksumShares: [],
-                        masterVerificationShare: 0
-                    };
-                    for (const polynomial of wordPolynomials) {
-                        share.wordShares.push(evaluatePolynomial(polynomial, shareIndex));
+                try {
+                    for (let shareIndex = 1; shareIndex <= n; shareIndex++) {
+                        const share = {
+                            shareNumber: shareIndex,
+                            wordShares: [],
+                            checksumShares: [],
+                            masterVerificationShare: 0
+                        };
+                        for (const polynomial of wordPolynomials) {
+                            share.wordShares.push(evaluatePolynomial(polynomial, shareIndex));
+                        }
+                        for (const polynomial of checksumPolynomials) {
+                            share.checksumShares.push(evaluatePolynomial(polynomial, shareIndex));
+                        }
+                        share.masterVerificationShare = evaluatePolynomial(masterPolynomial, shareIndex);
+                        shares.push(share);
                     }
-                    for (const polynomial of checksumPolynomials) {
-                        share.checksumShares.push(evaluatePolynomial(polynomial, shareIndex));
-                    }
-                    share.masterVerificationShare = evaluatePolynomial(masterPolynomial, shareIndex);
-                    shares.push(share);
+                    // return { shares }; // ORIGINAL
+                    return { shares, debugCoefficients }; // TEMPORARY DEBUG
+                } finally {
+                    // Security: Clean up sensitive data from memory
+                    secureWipeArray(wordIndices);
+                    secureWipeArray(checksumSecrets);
+                    wordPolynomials.forEach(poly => secureWipeArray(poly));
+                    checksumPolynomials.forEach(poly => secureWipeArray(poly));
+                    secureWipeArray(masterPolynomial);
                 }
-                // return { shares }; // ORIGINAL
-                return { shares, debugCoefficients }; // TEMPORARY DEBUG
             }
 
             /**
@@ -3403,6 +3464,11 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     sharesWithInvalidChecksums: new Set()
                 };
 
+                // Declare sensitive variables outside try block for cleanup in finally
+                let recoveredWords = [];
+                let recoveredChecks = [];
+                let recoveredMaster = 0;
+
                 try {
                     // 1. Pre-flight checks for input validity
                     if (!Array.isArray(shares) || shares.length < 2) {
@@ -3420,7 +3486,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     const rowCount = wordCount / WORDS_PER_ROW;
 
                     // 2. Recover all secret numbers via Lagrange Interpolation
-                    const recoveredWords = [];
+                    recoveredWords = [];
                     for (let i = 0; i < wordCount; i++) {
                         const points = shares.map((share) => ({
                             x: mod(share.shareNumber),
@@ -3429,7 +3495,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         recoveredWords.push(lagrangeInterpolateAtZero(points));
                     }
 
-                    const recoveredChecks = [];
+                    recoveredChecks = [];
                     for (let row = 0; row < rowCount; row++) {
                         const points = shares.map((share) => ({
                             x: mod(share.shareNumber),
@@ -3442,18 +3508,20 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         x: mod(share.shareNumber),
                         y: normalizeShareValue(share.masterVerificationShare, `Master verification (share ${share.shareNumber})`)
                     }));
-                    const recoveredMaster = lagrangeInterpolateAtZero(masterPoints);
+                    recoveredMaster = lagrangeInterpolateAtZero(masterPoints);
                     
                     // 3. Perform internal Schiavinato validations
                     const recomputedChecks = computeRowChecks(recoveredWords);
                     for (let row = 0; row < rowCount; row++) {
-                        if (recoveredChecks[row] !== recomputedChecks[row]) {
+                        // Use constant-time comparison to prevent timing attacks
+                        if (!constantTimeEqual(recoveredChecks[row], recomputedChecks[row])) {
                             report.errors.row.push(row);
                         }
                     }
 
                     const recomputedMaster = computeMasterCheck(recoveredWords);
-                    if (recoveredMaster !== recomputedMaster) {
+                    // Use constant-time comparison to prevent timing attacks
+                    if (!constantTimeEqual(recoveredMaster, recomputedMaster)) {
                         report.errors.master = true;
                     }
 
@@ -3482,6 +3550,11 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 } catch (error) {
                     // Catch unrecoverable errors (e.g., bad inputs, non-invertible matrix)
                     report.errors.generic = error.message;
+                } finally {
+                    // Security: Clean up sensitive data from memory
+                    secureWipeArray(recoveredWords);
+                    secureWipeArray(recoveredChecks);
+                    recoveredMaster = 0;
                 }
 
                 return report;
