@@ -61,6 +61,60 @@ This last point reflects a core principle of Schiavinato Sharing and GRIFORTIS: 
 
 ---
 
+## Implemented Security Hardening
+
+The Schiavinato Sharing implementations include defense-in-depth security measures:
+
+### Timing Attack Prevention
+
+All implementations use **constant-time comparison** for checksum validation to prevent timing side-channel attacks:
+
+- **Row checksums**: Compared using bitwise XOR without early exit
+- **Master checksum**: Validated with constant-time equality checks  
+- **BIP39 checksums**: Binary string comparison in constant time
+
+This prevents attackers with precise timing measurement capability from inferring information about secret values through execution time differences.
+
+**Risk Context**: Timing attacks require nanosecond-level measurement precision and are primarily relevant in network-accessible environments. For air-gapped offline usage, this risk is minimal but the protection is provided regardless.
+
+### Memory Dump Protection
+
+All implementations explicitly wipe sensitive data from memory after use:
+
+- **Word indices**: Zeroed immediately after share generation
+- **Polynomial coefficients**: Cleared after polynomial evaluation
+- **Recovered secrets**: Overwritten after validation completes
+
+While garbage collection will eventually reclaim memory, explicit cleanup reduces the window of vulnerability to memory dump attacks (e.g., from malware with memory access or forensic analysis).
+
+**Implementation Details**:
+- Arrays are overwritten with zeros element-by-element
+- Cleanup occurs in `finally` blocks to ensure execution even on errors
+- TypeScript library: `secureWipeArray()` and `secureWipeNumber()` functions
+- HTML tool: `secureWipeArray()` JavaScript function
+
+**Risk Context**: Memory dump attacks require either physical access to the device or the presence of malware with memory inspection capabilities. Air-gapped environments are inherently more resistant to these threats, but the protections are implemented as best practice.
+
+### Cryptographic Randomness
+
+Both implementations use cryptographically secure random number generation:
+
+- **Browser/HTML tool**: `window.crypto.getRandomValues()`
+- **Node.js library**: `crypto.randomFillSync()` (via `@noble/hashes`)
+- **Fallback validation**: Throws error if secure randomness is unavailable
+
+**No use of `Math.random()`** anywhere in share generation or key material creation.
+
+### Transparency
+
+These security features are:
+- **Automatic**: Work without user configuration
+- **Transparent**: Do not affect test vectors or share compatibility
+- **Auditable**: Documented in source code comments
+- **Tested**: Covered by automated test suites
+
+---
+
 ## Non-Security Feedback
 
 For general questions, suggestions, or non-sensitive bug reports (typos, minor formatting issues, unclear explanations), please use the standard GitHub issue tracker instead of the security contact. This helps keep security channels focused on time-sensitive and high-impact concerns.

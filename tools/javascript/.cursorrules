@@ -1,0 +1,53 @@
+# Schiavinato Sharing JavaScript Library - Cursor Rules
+
+## Project Overview
+This is the JavaScript/TypeScript implementation of the Schiavinato Sharing scheme.
+It is extracted from the HTML tool (schiavinato_sharing.html) and refactored into a modular structure.
+
+## Code Style
+- Use TypeScript strict mode
+- Prefer explicit types over inference when it improves readability
+- Use JSDoc comments for all public functions
+- Include mathematical notation in comments where appropriate (e.g., ∏, Σ, ≡)
+- Follow existing naming conventions (camelCase for functions, UPPER_CASE for constants)
+
+## Architecture
+- Core field operations: src/core/field.ts
+- Polynomial operations: src/core/polynomial.ts  
+- Lagrange interpolation: src/core/lagrange.ts
+- Schiavinato-specific logic: src/schiavinato/*.ts
+- Utilities: src/utils/*.ts
+- Type definitions: src/types.ts
+- Main entry: src/index.ts
+
+## Testing
+- All new functions must have unit tests
+- Use Vitest for testing
+- Maintain 100% code coverage
+- Test against canonical test vectors in TEST_VECTORS.md
+- Include edge cases and error conditions
+
+## Security
+- Never modify cryptographic primitives without thorough review
+- Always use cryptographically secure random sources
+- Validate all inputs thoroughly
+- Document security considerations in code comments
+
+## Dependencies
+- Minimize dependencies
+- Only use audited libraries for cryptographic operations
+- Current deps: @scure/bip39, @noble/hashes
+- Both are audited and maintained by Paul Miller (@paulmillr)
+
+## Documentation
+- Update README.md for API changes
+- Update CHANGELOG.md for all changes
+- Keep examples up-to-date
+- Document breaking changes clearly
+
+## Important Notes
+- The HTML tool (schiavinato_sharing.html) is NOT modified - it remains standalone
+- This library is a separate implementation for programmatic use
+- Maintain backward compatibility with the HTML tool's API where possible
+- GF(2053) operations are core - do not change without whitepaper approval
+

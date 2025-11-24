@@ -1169,6 +1169,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             }
         }
         
+        // Note: These constants are also defined in SchiavinatoSharing module below.
+        // Both definitions are needed because they exist in different closure contexts
+        // (UI script scope vs. library module scope) for proper encapsulation.
         const WORDS_PER_ROW = 3;
         const FIELD_PRIME = 2053;
         
@@ -1305,29 +1308,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             inputs.forEach(input => {
                 input.dataset.lastAttemptValue = String(input.value ?? '');
             });
-        }
-
-        /**
-         * Returns a set of share numbers whose inputs changed since the last attempt.
-         */
-        function collectDirtyShareNumbers() {
-            const dirtyShares = new Set();
-            const containers = recoverSharesContainer.querySelectorAll('.share-input-container');
-            containers.forEach(container => {
-                const shareNumberInput = container.querySelector('[id^="recover-x-"]');
-                if (!shareNumberInput) return;
-                const shareNumber = parseInt(shareNumberInput.value, 10);
-                const shareId = Number.isInteger(shareNumber) ? shareNumber : parseInt(container.dataset.shareIndex ?? '0', 10);
-                const relevantInputs = container.querySelectorAll('input');
-                for (const input of relevantInputs) {
-                    const lastAttemptValue = input.dataset.lastAttemptValue ?? '';
-                    if (String(input.value ?? '') !== lastAttemptValue) {
-                        dirtyShares.add(shareId);
-                        break;
-                    }
-                }
-            });
-            return dirtyShares;
         }
 
         // ==========================================================================
@@ -1475,16 +1455,10 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
                 // 2. Call the core logic function
                 // Note: BIP39_WORDLIST must be globally available for this to work.
-                
-                // --- TEMPORARY DEBUG START ---
-                // To revert, uncomment the ORIGINAL lines and remove the TEMPORARY DEBUG lines.
-                // const { shares } = await SchiavinatoSharing.splitBip39(mnemonic, k, n, BIP39_WORDLIST); // ORIGINAL
-                const { shares, debugCoefficients } = await SchiavinatoSharing.splitBip39(mnemonic, k, n, BIP39_WORDLIST); // TEMPORARY DEBUG
+                const { shares } = await SchiavinatoSharing.splitBip39(mnemonic, k, n, BIP39_WORDLIST);
                 
                 // 3. Populate the next page and display it
-                // displayShares(shares, { identifier, date, scheme, wordCount: createWordCount }, debugCoefficients); // ORIGINAL
-                displayShares(shares, { identifier, date, scheme, wordCount: createWordCount }, debugCoefficients); // TEMPORARY DEBUG
-                // --- TEMPORARY DEBUG END ---
+                displayShares(shares, { identifier, date, scheme, wordCount: createWordCount });
 
                 showPage('create2', 'Create Shares');
 
@@ -1505,150 +1479,138 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         btnBackToRecover1.addEventListener('click', () => showPage('recover1', 'Recover Wallet'));
 
         btnRecoverWallet.addEventListener('click', async () => {
-            /**
-             * Recovery validation overview (human-first):
-             * 1. Only ask for the minimum number of shares (`k`), but require each share form to be fully populated.
-             * 2. Validate formats locally (words, numbers, or mixed "olive - 1234" styles) and enforce GF(2053) bounds.
-             * 3. Reject duplicate share numbers before attempting any cryptographic work.
-             * 4. Keep field-level highlights in place until the user fixes the corresponding input.
-             */
-            const dirtyShareNumbers = collectDirtyShareNumbers();
+            const k = parseInt(document.querySelector('input[name="recover-k"]:checked').value, 10);
+            const shares = [];
+            const shareContainers = document.querySelectorAll('#recover-shares-container .share-input-container');
+
+            if (shareContainers.length !== k) {
+                await showErrorModal('Input Error', "The number of input forms does not match the selected threshold (K).");
+                return;
+            }
+            
+            const uiErrors = new Set();
+            const seenShareNumbers = new Map(); // shareNumber -> shareIndex
+            let parsingError = false;
+
+            for (let i = 0; i < k; i++) {
+                const container = shareContainers[i];
+                const shareIndex = i + 1;
+                container.dataset.shareIndex = String(shareIndex);
+
+                const shareNumberInput = container.querySelector(`#recover-x-${shareIndex}`);
+                const masterShareInput = container.querySelector(`#recover-master-${shareIndex}`);
+
+                if (!shareNumberInput || !masterShareInput) {
+                    uiErrors.add('A share input block is missing required fields.');
+                    parsingError = true;
+                    continue;
+                }
+
+                shareNumberInput.dataset.fieldLabel = `Share ${shareIndex} number`;
+                shareNumberInput.dataset.allowNumeric = 'true';
+                masterShareInput.dataset.fieldLabel = `Share ${shareIndex} master verification`;
+                masterShareInput.dataset.allowNumeric = 'true';
+
+                const shareNumberRaw = shareNumberInput.value.trim();
+                const shareNumber = Number(shareNumberRaw);
+                if (!Number.isInteger(shareNumber) || shareNumber <= 0 || shareNumber >= FIELD_PRIME) {
+                    const message = `Share numbers must be integers between 1 and ${FIELD_PRIME - 1}.`;
+                    markInputInvalid(shareNumberInput, message);
+                    uiErrors.add(message);
+                    parsingError = true;
+                    continue;
+                }
+                if (seenShareNumbers.has(shareNumber)) {
+                    const existingIndex = seenShareNumbers.get(shareNumber);
+                    const existingInput = document.querySelector(`#recover-x-${existingIndex}`);
+                    const duplicateMessage = `Share number ${shareNumber} is duplicated. Each share must have a unique X value.`;
+                    markInputInvalid(shareNumberInput, duplicateMessage);
+                    if (existingInput) {
+                        markInputInvalid(existingInput, duplicateMessage);
+                    }
+                    uiErrors.add('Duplicate share numbers detected. Resolve before continuing.');
+                    parsingError = true;
+                    continue;
+                }
+                seenShareNumbers.set(shareNumber, shareIndex);
+
+                const masterParse = parseShareValue(masterShareInput.value, { allowNumeric: true });
+                if (!masterParse.ok) {
+                    markInputInvalid(masterShareInput, formatParseError(masterShareInput.dataset.fieldLabel, masterParse));
+                    uiErrors.add('Fix the highlighted master verification fields.');
+                    parsingError = true;
+                    continue;
+                }
+
+                const wordsPerChecksum = WORDS_PER_ROW;
+                const numRows = recoverWordCount / wordsPerChecksum;
+                const share = {
+                    shareNumber,
+                    shareIndex,
+                    wordShares: [],
+                    checksumShares: [],
+                    masterVerificationShare: masterParse.value
+                };
+
+                let rowHadError = false;
+                for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
+                    for (let wordSlot = 0; wordSlot < wordsPerChecksum; wordSlot++) {
+                        const input = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="word-${wordSlot}"]`);
+                        if (!input) continue;
+                        const parseResult = parseShareValue(input.value, { allowNumeric: true });
+                        if (!parseResult.ok) {
+                            const message = formatParseError(input.dataset.fieldLabel, parseResult);
+                            markInputInvalid(input, message, { rowHighlight: true });
+                            uiErrors.add('Fix the highlighted share rows before continuing.');
+                            rowHadError = true;
+                        } else {
+                            clearInputErrorState(input);
+                            share.wordShares.push(parseResult.value);
+                        }
+                    }
+                    const checksumInput = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="checksum"]`);
+                    if (checksumInput) {
+                        const checksumParse = parseShareValue(checksumInput.value, { allowNumeric: true });
+                        if (!checksumParse.ok) {
+                            const message = formatParseError(checksumInput.dataset.fieldLabel, checksumParse);
+                            markInputInvalid(checksumInput, message, { rowHighlight: true });
+                            uiErrors.add('Fix the highlighted share rows before continuing.');
+                            rowHadError = true;
+                        } else {
+                            clearInputErrorState(checksumInput);
+                            share.checksumShares.push(checksumParse.value);
+                        }
+                    }
+                }
+
+                if (rowHadError) {
+                    parsingError = true;
+                    continue;
+                }
+
+                shares.push(share);
+            }
+
+            if (uiErrors.size > 0) {
+                await showErrorModal('Input Error', Array.from(uiErrors).join('\n'));
+                return;
+            }
+
+            if (parsingError || shares.length !== k) {
+                await showErrorModal('Input Error', 'Please fix the highlighted fields before attempting recovery again.');
+                return;
+            }
+
+            // 2. CALL UNIFIED RECOVERY & VALIDATION
             try {
-                const k = parseInt(document.querySelector('input[name="recover-k"]:checked').value, 10);
-                const shares = [];
-                const shareContainers = document.querySelectorAll('#recover-shares-container .share-input-container');
-
-                if (shareContainers.length !== k) {
-                    await showErrorModal('Input Error', "The number of input forms does not match the selected threshold (K).");
-                    return;
-                }
+                const report = await SchiavinatoSharing.recoverAndValidate(shares, recoverWordCount, BIP39_WORDLIST);
                 
-                const uiErrors = new Set();
-                const seenShareNumbers = new Map(); // shareNumber -> shareIndex
-                let parsingError = false;
+                // 3. DISPLAY RESULTS
+                await displayValidationResults(report, shares);
 
-                for (let i = 0; i < k; i++) {
-                    const container = shareContainers[i];
-                    const shareIndex = i + 1;
-                    container.dataset.shareIndex = String(shareIndex);
-
-                    const shareNumberInput = container.querySelector(`#recover-x-${shareIndex}`);
-                    const masterShareInput = container.querySelector(`#recover-master-${shareIndex}`);
-
-                    if (!shareNumberInput || !masterShareInput) {
-                        uiErrors.add('A share input block is missing required fields.');
-                        parsingError = true;
-                        continue;
-                    }
-
-                    shareNumberInput.dataset.fieldLabel = `Share ${shareIndex} number`;
-                    shareNumberInput.dataset.allowNumeric = 'true';
-                    masterShareInput.dataset.fieldLabel = `Share ${shareIndex} master verification`;
-                    masterShareInput.dataset.allowNumeric = 'true';
-
-                    const shareNumberRaw = shareNumberInput.value.trim();
-                    const shareNumber = Number(shareNumberRaw);
-                    if (!Number.isInteger(shareNumber) || shareNumber <= 0 || shareNumber >= FIELD_PRIME) {
-                        const message = `Share numbers must be integers between 1 and ${FIELD_PRIME - 1}.`;
-                        markInputInvalid(shareNumberInput, message);
-                        uiErrors.add(message);
-                        parsingError = true;
-                        continue;
-                    }
-                    if (seenShareNumbers.has(shareNumber)) {
-                        const existingIndex = seenShareNumbers.get(shareNumber);
-                        const existingInput = document.querySelector(`#recover-x-${existingIndex}`);
-                        const duplicateMessage = `Share number ${shareNumber} is duplicated. Each share must have a unique X value.`;
-                        markInputInvalid(shareNumberInput, duplicateMessage);
-                        if (existingInput) {
-                            markInputInvalid(existingInput, duplicateMessage);
-                        }
-                        uiErrors.add('Duplicate share numbers detected. Resolve before continuing.');
-                        parsingError = true;
-                        continue;
-                    }
-                    seenShareNumbers.set(shareNumber, shareIndex);
-
-                    const masterParse = parseShareValue(masterShareInput.value, { allowNumeric: true });
-                    if (!masterParse.ok) {
-                        markInputInvalid(masterShareInput, formatParseError(masterShareInput.dataset.fieldLabel, masterParse));
-                        uiErrors.add('Fix the highlighted master verification fields.');
-                        parsingError = true;
-                        continue;
-                    }
-
-                    const wordsPerChecksum = WORDS_PER_ROW;
-                    const numRows = recoverWordCount / wordsPerChecksum;
-                    const share = {
-                        shareNumber,
-                        shareIndex,
-                        wordShares: [],
-                        checksumShares: [],
-                        masterVerificationShare: masterParse.value
-                    };
-
-                    let rowHadError = false;
-                    for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
-                        for (let wordSlot = 0; wordSlot < wordsPerChecksum; wordSlot++) {
-                            const input = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="word-${wordSlot}"]`);
-                            if (!input) continue;
-                            const parseResult = parseShareValue(input.value, { allowNumeric: true });
-                            if (!parseResult.ok) {
-                                const message = formatParseError(input.dataset.fieldLabel, parseResult);
-                                markInputInvalid(input, message, { rowHighlight: true });
-                                uiErrors.add('Fix the highlighted share rows before continuing.');
-                                rowHadError = true;
-                            } else {
-                                clearInputErrorState(input);
-                                share.wordShares.push(parseResult.value);
-                            }
-                        }
-                        const checksumInput = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="checksum"]`);
-                        if (checksumInput) {
-                            const checksumParse = parseShareValue(checksumInput.value, { allowNumeric: true });
-                            if (!checksumParse.ok) {
-                                const message = formatParseError(checksumInput.dataset.fieldLabel, checksumParse);
-                                markInputInvalid(checksumInput, message, { rowHighlight: true });
-                                uiErrors.add('Fix the highlighted share rows before continuing.');
-                                rowHadError = true;
-                            } else {
-                                clearInputErrorState(checksumInput);
-                                share.checksumShares.push(checksumParse.value);
-                            }
-                        }
-                    }
-
-                    if (rowHadError) {
-                        parsingError = true;
-                        continue;
-                    }
-
-                    shares.push(share);
-                }
-
-                if (uiErrors.size > 0) {
-                    await showErrorModal('Input Error', Array.from(uiErrors).join('\n'));
-                    return;
-                }
-
-                if (parsingError || shares.length !== k) {
-                    await showErrorModal('Input Error', 'Please fix the highlighted fields before attempting recovery again.');
-                    return;
-                }
-
-                // 2. CALL UNIFIED RECOVERY & VALIDATION
-                try {
-                    const report = await SchiavinatoSharing.recoverAndValidate(shares, recoverWordCount, BIP39_WORDLIST);
-                    
-                    // 3. DISPLAY RESULTS
-                    await displayValidationResults(report, shares, dirtyShareNumbers);
-
-                } catch (error) {
-                    // Catches errors from the UI gathering phase (e.g., parsing)
-                    await showErrorModal('Input Error', error.message);
-                }
-            } finally {
-                snapshotShareInputs();
+            } catch (error) {
+                // Catches errors from the UI gathering phase (e.g., parsing)
+                await showErrorModal('Input Error', error.message);
             }
         });
 
@@ -1665,7 +1627,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     clearManualRecoveryError();
                     displayManualRecoveryResults(values, multipliers);
                 } catch (error) {
-                    console.error('Manual recovery multiplier error:', error);
                     showManualRecoveryError(error.message || 'Could not compute multipliers. Check your inputs and try again.');
                     resetManualRecoveryResults();
                 }
@@ -1678,51 +1639,217 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
         /**
          * Processes the report from the recovery function and updates the UI accordingly.
-         * It handles success, partial success (BIP39 checksum fail), and various failures.
+         * Implements intelligent error cascading and surgical error messages.
          * @param {Object} report - The report object from `recoverAndValidate`.
          * @param {Array<Object>} shares - The array of share objects from the UI, needed for context.
          */
-        async function displayValidationResults(report, shares, dirtyShareNumbers = new Set()) {
-            const { recoveredMnemonic, errors, sharesWithInvalidChecksums } = report;
-            const hasSchiavinatoErrors = errors.row.length > 0 || errors.master;
-            const hasOnlyBip39Error = !hasSchiavinatoErrors && !errors.generic && errors.bip39;
+        async function displayValidationResults(report, shares) {
+            const { recoveredMnemonic, errors } = report;
+            
+            // Clear any previous error highlights
+            clearAllErrorHighlights();
 
-            if (hasSchiavinatoErrors || errors.generic) {
-                // --- FAILURE CASE: Schiavinato or Generic Errors ---
-                let errorMessage = errors.generic ? `${errors.generic}` : 'Validation failed. Please check the highlighted fields.';
-                
-                if (errors.row.length > 0) {
-                    const failingRows = errors.row.map(r => `Row #${r + 1}`).join(', ');
-                    errorMessage += ` Mismatch found in: ${failingRows}.`;
-                    // This highlights the row across ALL shares, which is the correct behavior
-                    // for post-recovery errors where the faulty share is unknown.
-                    errors.row.forEach(rowIndex => highlightErrorRow(rowIndex, null, dirtyShareNumbers));
-                }
-                if (errors.master) {
-                    errorMessage += ' Master verification failed.';
-                    highlightMasterError(sharesWithInvalidChecksums, shares, dirtyShareNumbers);
-                }
-                
-                await showErrorModal('Recovery Failed', errorMessage);
+            // CASE 1: Generic/structural errors (highest priority)
+            if (errors.generic) {
+                await showErrorModal('Recovery Failed', errors.generic);
+                return;
+            }
 
-            } else if (hasOnlyBip39Error) {
-                // --- SPECIAL CASE: Schiavinato valid, but BIP39 checksum is wrong ---
+            // CASE 2: Row errors exist
+            if (errors.failedRows && errors.failedRows.length > 0) {
+                errors.failedRows.forEach(rowError => {
+                    // Highlight ALL shares - we cannot identify which specific share has the error
+                    const rowIndex = rowError.rowNumber - 1;  // Convert to 0-based index
+                    highlightErrorRow(rowIndex);
+                });
+                
+                await showErrorModal('Recovery Failed', 'Recovery failed. Check the highlighted fields and try again.');
+                return;
+            }
+
+            // CASE 3: Master error but all rows passed (nightmare scenario)
+            if (errors.masterError && errors.masterError.failed) {
+                if (errors.masterError.isNightmare) {
+                    // Highlight all master verification fields
+                    highlightMasterError();
+                    
+                    let errorMessage = 'Master verification failed.\n\n';
+                    errorMessage += 'Step 1: Check the highlighted master fields.\n';
+                    errorMessage += 'Step 2: If master fields are correct, carefully check all other fields.';
+                    
+                    await showErrorModal('Recovery Failed', errorMessage);
+                } else {
+                    await showErrorModal('Recovery Failed', 'Master checksum failed unexpectedly.');
+                }
+                return;
+            }
+
+            // CASE 4: BIP39 failed but Schiavinato checks passed (show seed anyway)
+            if (errors.bip39) {
+                let errorMessage = 'BIP39 checksum invalid.\n\n';
+                errorMessage += 'The recovered words may have errors in the final word, or the shares were created from a manually-calculated seed.\n\n';
+                errorMessage += `Recovered seed:\n${recoveredMnemonic}`;
+                
                 const confirmed = await showConfirmationModal(
                     'BIP39 Checksum Invalid',
-                    'The shares are mathematically correct, but the resulting mnemonic is NOT a valid BIP39 seed phrase. This can happen with older versions of this tool or manual errors. You can view the invalid phrase, but DO NOT use it as a real wallet.'
+                    errorMessage
                 );
-                if (confirmed) {
-                    displayRecoveredMnemonic(recoveredMnemonic, true); // Pass true for warning
+                if (confirmed && recoveredMnemonic) {
+                    snapshotShareInputs();
+                    displayRecoveredMnemonic(recoveredMnemonic, true);
                     showPage('recover2', 'Recover Wallet');
                 }
-            } else if (recoveredMnemonic) {
-                // --- SUCCESS CASE ---
-                displayRecoveredMnemonic(recoveredMnemonic, false); // Pass false for no warning
-                showPage('recover2', 'Recover Wallet');
-            } else {
-                // --- UNEXPECTED CASE ---
-                await showErrorModal('Unknown Error', 'An unexpected error occurred during recovery.');
+                return;
             }
+
+            // CASE 5: SUCCESS - All checks passed
+            if (recoveredMnemonic) {
+                snapshotShareInputs();
+                displayRecoveredMnemonic(recoveredMnemonic, false);
+                showPage('recover2', 'Recover Wallet');
+                return;
+            }
+
+            // CASE 6: Unexpected error
+            await showErrorModal('Unknown Error', 'An unexpected error occurred during recovery.');
+        }
+
+        /**
+         * Attempts automatic validation when all fields are filled.
+         * Runs silently - only highlights errors, no modal popups.
+         */
+        async function attemptAutoValidation() {
+            try {
+                const k = parseInt(document.querySelector('input[name="recover-k"]:checked')?.value, 10);
+                if (!k) return;
+
+                const shareContainers = document.querySelectorAll('#recover-shares-container .share-input-container');
+                if (shareContainers.length !== k) return;
+
+                // Check if all fields are filled
+                let allFilled = true;
+                shareContainers.forEach(container => {
+                    const inputs = container.querySelectorAll('input');
+                    inputs.forEach(input => {
+                        if (!input.value || !input.value.trim()) {
+                            allFilled = false;
+                        }
+                    });
+                });
+
+                if (!allFilled) return;
+
+                // Parse shares (reuse parsing logic from main recovery)
+                const shares = [];
+                const seenShareNumbers = new Map();
+                let hasParseError = false;
+
+                for (let i = 0; i < k; i++) {
+                    const container = shareContainers[i];
+                    const shareIndex = i + 1;
+
+                    const shareNumberInput = container.querySelector(`#recover-x-${shareIndex}`);
+                    const masterShareInput = container.querySelector(`#recover-master-${shareIndex}`);
+
+                    if (!shareNumberInput || !masterShareInput) {
+                        hasParseError = true;
+                        continue;
+                    }
+
+                    const shareNumber = Number(shareNumberInput.value.trim());
+                    if (!Number.isInteger(shareNumber) || shareNumber <= 0 || shareNumber >= FIELD_PRIME) {
+                        hasParseError = true;
+                        continue;
+                    }
+
+                    if (seenShareNumbers.has(shareNumber)) {
+                        hasParseError = true;
+                        continue;
+                    }
+                    seenShareNumbers.set(shareNumber, shareIndex);
+
+                    const masterParse = parseShareValue(masterShareInput.value, { allowNumeric: true });
+                    if (!masterParse.ok) {
+                        hasParseError = true;
+                        continue;
+                    }
+
+                    const wordsPerChecksum = WORDS_PER_ROW;
+                    const numRows = recoverWordCount / wordsPerChecksum;
+                    const share = {
+                        shareNumber,
+                        shareIndex,
+                        wordShares: [],
+                        checksumShares: [],
+                        masterVerificationShare: masterParse.value
+                    };
+
+                    for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
+                        for (let wordSlot = 0; wordSlot < wordsPerChecksum; wordSlot++) {
+                            const input = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="word-${wordSlot}"]`);
+                            if (!input) continue;
+                            const parseResult = parseShareValue(input.value, { allowNumeric: true });
+                            if (!parseResult.ok) {
+                                hasParseError = true;
+                                break;
+                            }
+                            share.wordShares.push(parseResult.value);
+                        }
+                        if (hasParseError) break;
+
+                        const checksumInput = container.querySelector(`input[data-row-index="${rowIndex}"][data-slot="checksum"]`);
+                        if (checksumInput) {
+                            const checksumParse = parseShareValue(checksumInput.value, { allowNumeric: true });
+                            if (!checksumParse.ok) {
+                                hasParseError = true;
+                                break;
+                            }
+                            share.checksumShares.push(checksumParse.value);
+                        }
+                    }
+
+                    if (hasParseError) break;
+                    shares.push(share);
+                }
+
+                if (hasParseError || shares.length !== k) return;
+
+                // Run validation
+                const report = await SchiavinatoSharing.recoverAndValidate(shares, recoverWordCount, BIP39_WORDLIST);
+
+                // Clear all error highlights first
+                clearAllErrorHighlights();
+
+                // If all checks passed, we're done - no highlighting needed
+                if (report.recoveredMnemonic && 
+                    report.errors.failedRows.length === 0 && 
+                    !report.errors.masterError.failed) {
+                    return;
+                }
+
+                // Show errors silently (no modal)
+                if (report.errors.failedRows && report.errors.failedRows.length > 0) {
+                    // Highlight row errors
+                    report.errors.failedRows.forEach(rowError => {
+                        const rowIndex = rowError.rowNumber - 1;  // Convert to 0-based index
+                        highlightErrorRow(rowIndex);
+                    });
+                } else if (report.errors.masterError && report.errors.masterError.failed) {
+                    // Only highlight master if NO row errors exist (nightmare scenario)
+                    highlightMasterError();
+                }
+
+            } catch (error) {
+                // Silently ignore errors - user will see them when they click Recover
+            }
+        }
+        
+        /**
+         * Clears all error highlighting from input fields
+         */
+        function clearAllErrorHighlights() {
+            const allInputs = document.querySelectorAll('input.invalid');
+            allInputs.forEach(input => clearInputErrorState(input));
         }
         
         disclaimerCheckbox.addEventListener('change', () => {
@@ -2015,7 +2142,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 polynomialDisplay.innerHTML = `<code class="mono" style="font-size: 1.1rem; word-wrap: break-word;">${equation}</code>`;
             } catch (error) {
                 polynomialDisplay.innerHTML = `<span style="color: var(--error-red);">Error: Could not generate secure random numbers.</span>`;
-                console.error('Manual sharding helper error:', error);
             }
         }
 
@@ -2096,7 +2222,10 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             inputX.dataset.allowNumeric = 'true';
             inputX.dataset.fieldLabel = `Share ${shareIndex} number`;
             initializeRecoveryInputTracking(inputX);
-            inputX.addEventListener('blur', () => validateInputOnBlur(inputX));
+            inputX.addEventListener('blur', () => {
+                validateInputOnBlur(inputX);
+                attemptAutoValidation();
+            });
             inputX.addEventListener('input', () => clearInputErrorState(inputX));
             shareNumberGroup.appendChild(labelX);
             shareNumberGroup.appendChild(inputX);
@@ -2280,7 +2409,8 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 setTimeout(() => {
                     if (!autocompleteContainer.contains(document.activeElement)) {
                         hideAutocomplete();
-                        validateInputOnBlur(input); // Use strict validation on blur
+                        validateInputOnBlur(input);
+                        attemptAutoValidation();
                     }
                 }, 150);
             });
@@ -2510,50 +2640,32 @@ TERMS OF USE & LIABILITY DISCLAIMER:
         }
 
         /**
-         * Marks every input involved in the specified checksum row across all share forms as invalid.
-         * @param {number} rowIndex - Zero-based index of the row reported by the checksum error.
+         * Highlights all inputs in the specified row across all shares.
+         * Note: We cannot determine which specific share has an error, so we highlight all.
+         * @param {number} rowIndex - Zero-based index of the row to highlight.
          */
-        function highlightErrorRow(rowIndex, targetShareNumber = null, dirtyShareNumbers = new Set()) {
+        function highlightErrorRow(rowIndex) {
             if (typeof rowIndex !== 'number' || rowIndex < 0) return;
             const shareContainers = recoverSharesContainer.querySelectorAll('.share-input-container');
-            const shouldFilterByDirty = !targetShareNumber && dirtyShareNumbers && dirtyShareNumbers.size > 0;
+            
             shareContainers.forEach(container => {
-                const shareNumberInput = container.querySelector('[id^="recover-x-"]');
-                const containerShareNumber = parseInt(shareNumberInput?.value, 10);
-                if (targetShareNumber && containerShareNumber !== targetShareNumber) {
-                    return;
-                }
-                if (shouldFilterByDirty && !dirtyShareNumbers.has(containerShareNumber)) {
-                    return;
-                }
                 const inputs = container.querySelectorAll(`input[data-row-index="${rowIndex}"]`);
-                inputs.forEach(input => markInputInvalid(input, input.dataset.fieldLabel || 'Row value mismatch', { rowHighlight: true }));
+                inputs.forEach(input => {
+                    markInputInvalid(input, 'Check this field', { rowHighlight: true });
+                });
             });
         }
         
         /**
-         * Marks the "Master Verification" input field as invalid on specific share forms.
-         * If a share has an internal checksum error, it's a "suspect". If master verification
-         * fails, we highlight the master input on shares that are NOT suspects, as they are
-         * the likely source of the master error.
-         * @param {Set<number>} sharesWithInvalidChecksums - A set of share numbers with internal errors.
-         * @param {Array<Object>} shares - The array of share objects from the UI, needed for context.
+         * Marks all "Master Verification" input fields as invalid.
+         * Note: We cannot determine which specific share has an error, so we highlight all.
          */
-        function highlightMasterError(sharesWithInvalidChecksums, shares, dirtyShareNumbers = new Set()) {
+        function highlightMasterError() {
             const masterInputs = document.querySelectorAll('[id^="recover-master-"]');
-            const suspects = new Set(sharesWithInvalidChecksums || []);
-            if (!suspects.size && dirtyShareNumbers && dirtyShareNumbers.size) {
-                dirtyShareNumbers.forEach(num => suspects.add(num));
-            }
+            
             masterInputs.forEach(input => {
-                const shareIndex = parseInt(input.id.split('-').pop(), 10);
-                const share = shares.find(s => s.shareIndex === shareIndex);
-                if (!share) return;
-                const shouldHighlight = suspects.size ? suspects.has(share.shareNumber) : true;
-                if (shouldHighlight) {
-                    const label = input.dataset.fieldLabel || `Share ${shareIndex} master verification`;
-                    markInputInvalid(input, `${label} failed master verification.`, { rowHighlight: true });
-                }
+                const label = input.dataset.fieldLabel || 'Master verification';
+                markInputInvalid(input, `${label} failed. Check all master fields.`, { rowHighlight: true });
             });
         }
 
@@ -2614,11 +2726,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
          * @param {Array<Object>} shares - The array of generated share data.
          * @param {Object} metadata - The wallet metadata from the form.
          */
-        // --- TEMPORARY DEBUG START ---
-        // To revert, comment out the TEMPORARY DEBUG line and uncomment the ORIGINAL line.
-        // function displayShares(shares, metadata) { // ORIGINAL
-        function displayShares(shares, metadata, debugCoefficients) { // TEMPORARY DEBUG
-        // --- TEMPORARY DEBUG END ---
+        function displayShares(shares, metadata) {
             const outputContainer = document.getElementById('shares-output');
             const printContainer = document.getElementById('print-output');
             
@@ -2703,52 +2811,6 @@ TERMS OF USE & LIABILITY DISCLAIMER:
 
             outputContainer.innerHTML = allSharesScreenHtml;
             printContainer.innerHTML = allSharesPrintHtml;
-
-            // --- TEMPORARY DEBUG START ---
-            // To revert, simply delete this entire block.
-            const existingDebugContainer = document.getElementById('debug-container'); // TEMPORARY DEBUG
-            if (existingDebugContainer) { // TEMPORARY DEBUG
-                existingDebugContainer.remove(); // TEMPORARY DEBUG
-            } // TEMPORARY DEBUG
-            if (debugCoefficients) { // TEMPORARY DEBUG
-                const debugContainer = document.createElement('div'); // TEMPORARY DEBUG
-                debugContainer.id = 'debug-container'; // TEMPORARY DEBUG
-                debugContainer.className = 'component-card'; // TEMPORARY DEBUG
-                debugContainer.style.marginTop = '2rem'; // TEMPORARY DEBUG
-                debugContainer.style.border = '2px dashed var(--error-red)'; // TEMPORARY DEBUG
-                
-                // --- TEMPORARY DEBUG START ---
-                // This block formats the debug output into a copyable textarea of raw numbers.
-                let debugTextContent = ''; // TEMPORARY DEBUG
-
-                // Words
-                debugCoefficients.words.forEach(coeffs => { // TEMPORARY DEBUG
-                    coeffs.forEach(c => { // TEMPORARY DEBUG
-                        debugTextContent += `${c}\n`; // TEMPORARY DEBUG
-                    }); // TEMPORARY DEBUG
-                }); // TEMPORARY DEBUG
-
-                // Checksums
-                debugCoefficients.checksums.forEach(coeffs => { // TEMPORARY DEBUG
-                    coeffs.forEach(c => { // TEMPORARY DEBUG
-                        debugTextContent += `${c}\n`; // TEMPORARY DEBUG
-                    }); // TEMPORARY DEBUG
-                }); // TEMPORARY DEBUG
-
-                // Master
-                debugCoefficients.master.forEach(c => { // TEMPORARY DEBUG
-                    debugTextContent += `${c}\n`; // TEMPORARY DEBUG
-                }); // TEMPORARY DEBUG
-
-                let debugHtml = '<h3 style="color: var(--error-red);">TEMPORARY DEBUG INFO: Polynomial Coefficients</h3>'; // TEMPORARY DEBUG
-                debugHtml += '<p style="font-size: 0.8rem; color: var(--text-muted);">A raw list of the random coefficients used. You can copy from the text area below.</p>'; // TEMPORARY DEBUG
-                debugHtml += `<textarea readonly class="mono" style="width: 100%; height: 250px; white-space: pre; resize: vertical; padding: 1em; border-radius: 6px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--input-text);">${debugTextContent.trim()}</textarea>`; // TEMPORARY DEBUG
-                // --- TEMPORARY DEBUG END ---
-
-                debugContainer.innerHTML = debugHtml; // TEMPORARY DEBUG
-                outputContainer.insertAdjacentElement('afterend', debugContainer); // TEMPORARY DEBUG
-            } // TEMPORARY DEBUG
-            // --- TEMPORARY DEBUG END ---
         }
 
         /**
@@ -2848,9 +2910,49 @@ TERMS OF USE & LIABILITY DISCLAIMER:
             button.addEventListener('click', async () => {
                 const confirmed = await showConfirmationModal(title, text);
                 if (confirmed) {
+                    // Security: Clear all input fields before reloading to reduce memory dump risk
+                    cleanupSensitiveInputs();
                     window.location.reload();
                 }
             });
+        }
+        
+        /**
+         * Clears all potentially sensitive input fields in the DOM.
+         * This reduces the window of vulnerability to memory dump attacks.
+         */
+        function cleanupSensitiveInputs() {
+            // Clear all text inputs, textareas, and any displayed mnemonics
+            const allInputs = document.querySelectorAll('input[type="text"], input[type="password"], textarea');
+            allInputs.forEach(input => {
+                if (input.value) {
+                    input.value = '';
+                }
+            });
+            
+            // Clear any displayed mnemonic words
+            const mnemonicContainers = document.querySelectorAll('.share-word-list, .share-word-item code');
+            mnemonicContainers.forEach(container => {
+                if (container.textContent) {
+                    container.textContent = '';
+                }
+            });
+            
+            // Clear cached data in memory
+            createFlowWordCache = Array(24).fill('');
+            recoverFlowCache = Array(MAX_SHARES).fill(null).map(() => ({
+                shareNumber: '',
+                words: Array(24).fill(''),
+                checksums: Array(8).fill(''),
+                master: ''
+            }));
+            
+            // Clear autocomplete cache
+            if (typeof manualRecoveryShareCache !== 'undefined') {
+                Object.keys(manualRecoveryShareCache).forEach(key => {
+                    manualRecoveryShareCache[key] = [];
+                });
+            }
         }
         
         setupWordToggle(btn12Words, btn24Words, (count) => { createWordCount = count; }, updateSeedWordInputs);
@@ -3020,6 +3122,21 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         arr[i] = 0;
                     }
                 }
+            }
+
+            /**
+             * Attempts to overwrite a string variable by reassigning it to zeros.
+             * Note: JavaScript strings are immutable, so this has limited effectiveness.
+             * The original string may remain in memory until garbage collected, but this
+             * reduces the window of vulnerability by breaking the reference.
+             * @param {string} str - The string to wipe
+             * @returns {string} A zeroed-out string of the same length
+             */
+            function wipeString(str) {
+                if (typeof str === 'string' && str.length > 0) {
+                    return '\0'.repeat(str.length);
+                }
+                return '';
             }
 
             // ==========================================================================
@@ -3392,25 +3509,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 const masterSecret = wordIndices.reduce((acc, value) => modAdd(acc, value), 0);
                 const degree = k - 1;
 
-                // --- TEMPORARY DEBUG START ---
-                // To revert, uncomment the ORIGINAL lines and remove the TEMPORARY DEBUG lines/blocks.
-                const debugCoefficients = { words: [], checksums: [], master: null }; // TEMPORARY DEBUG
-                // const wordPolynomials = wordIndices.map((secret) => randomPolynomial(secret, degree)); // ORIGINAL
-                const wordPolynomials = wordIndices.map((secret) => { // TEMPORARY DEBUG
-                    const poly = randomPolynomial(secret, degree); // TEMPORARY DEBUG
-                    debugCoefficients.words.push(poly.slice(1)); // TEMPORARY DEBUG
-                    return poly; // TEMPORARY DEBUG
-                }); // TEMPORARY DEBUG
-                // const checksumPolynomials = checksumSecrets.map((secret) => randomPolynomial(secret, degree)); // ORIGINAL
-                const checksumPolynomials = checksumSecrets.map((secret) => { // TEMPORARY DEBUG
-                    const poly = randomPolynomial(secret, degree); // TEMPORARY DEBUG
-                    debugCoefficients.checksums.push(poly.slice(1)); // TEMPORARY DEBUG
-                    return poly; // TEMPORARY DEBUG
-                }); // TEMPORARY DEBUG
-                // const masterPolynomial = randomPolynomial(masterSecret, degree); // ORIGINAL
-                const masterPolynomial = randomPolynomial(masterSecret, degree); // TEMPORARY DEBUG
-                debugCoefficients.master = masterPolynomial.slice(1); // TEMPORARY DEBUG
-                // --- TEMPORARY DEBUG END ---
+                const wordPolynomials = wordIndices.map((secret) => randomPolynomial(secret, degree));
+                const checksumPolynomials = checksumSecrets.map((secret) => randomPolynomial(secret, degree));
+                const masterPolynomial = randomPolynomial(masterSecret, degree);
                 
                 const shares = [];
                 try {
@@ -3430,8 +3531,7 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                         share.masterVerificationShare = evaluatePolynomial(masterPolynomial, shareIndex);
                         shares.push(share);
                     }
-                    // return { shares }; // ORIGINAL
-                    return { shares, debugCoefficients }; // TEMPORARY DEBUG
+                    return { shares };
                 } finally {
                     // Security: Clean up sensitive data from memory
                     secureWipeArray(wordIndices);
@@ -3449,19 +3549,21 @@ TERMS OF USE & LIABILITY DISCLAIMER:
              * @param {Array<Object>} shares - An array of share objects from the UI.
              * @param {number} wordCount - The expected word count of the original mnemonic (12 or 24).
              * @param {Array<string>} wordlist - The BIP39 wordlist.
-             * @returns {Promise<Object>} A report object, e.g.,
-             *   { recoveredMnemonic: "...", errors: { row: [0, 2], master: true, bip39: false, generic: null }, sharesWithInvalidChecksums: Set<number> }
+             * @returns {Promise<Object>} A report object with detailed error tracking
              */
             async function recoverAndValidate(shares, wordCount, wordlist) {
                 const report = {
                     recoveredMnemonic: null,
+                    recoveredIndices: null,
                     errors: {
-                        row: [],
-                        master: false,
+                        failedRows: [],  // Array of {rowNumber, wordPositions, checksumLabel}
+                        masterError: {
+                            failed: false,
+                            isNightmare: false
+                        },
                         bip39: false,
                         generic: null
-                    },
-                    sharesWithInvalidChecksums: new Set()
+                    }
                 };
 
                 // Declare sensitive variables outside try block for cleanup in finally
@@ -3510,40 +3612,59 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                     }));
                     recoveredMaster = lagrangeInterpolateAtZero(masterPoints);
                     
-                    // 3. Perform internal Schiavinato validations
+                    // 3. Perform internal Schiavinato validations (COLLECT ALL ERRORS - don't stop early)
                     const recomputedChecks = computeRowChecks(recoveredWords);
-                    for (let row = 0; row < rowCount; row++) {
+                    for (let rowIdx = 0; rowIdx < rowCount; rowIdx++) {
                         // Use constant-time comparison to prevent timing attacks
-                        if (!constantTimeEqual(recoveredChecks[row], recomputedChecks[row])) {
-                            report.errors.row.push(row);
+                        if (!constantTimeEqual(recoveredChecks[rowIdx], recomputedChecks[rowIdx])) {
+                            // Convert to 1-indexed for human display
+                            const rowNumber = rowIdx + 1;
+                            const wordPositions = [
+                                rowIdx * WORDS_PER_ROW + 1,
+                                rowIdx * WORDS_PER_ROW + 2,
+                                rowIdx * WORDS_PER_ROW + 3
+                            ];
+                            report.errors.failedRows.push({
+                                rowNumber: rowNumber,
+                                wordPositions: wordPositions,
+                                checksumLabel: `C${rowNumber}`
+                            });
                         }
                     }
 
                     const recomputedMaster = computeMasterCheck(recoveredWords);
                     // Use constant-time comparison to prevent timing attacks
                     if (!constantTimeEqual(recoveredMaster, recomputedMaster)) {
-                        report.errors.master = true;
+                        report.errors.masterError.failed = true;
+                        // Nightmare scenario: all rows pass but master fails
+                        report.errors.masterError.isNightmare = (report.errors.failedRows.length === 0);
                     }
 
-                    // 4. If internal checks pass, proceed to BIP39 validation
-                    if (report.errors.row.length === 0 && !report.errors.master) {
-                        for(let i = 0; i < recoveredWords.length; i++) {
-                            const value = recoveredWords[i];
-                             if (value < 0 || value >= 2048) {
-                                report.errors.generic = `Recovered word #${i + 1} ("${value}") is outside the BIP39 range (0–2047). Cannot form a valid mnemonic.`;
-                                return report;
-                            }
+                    // 4. ALWAYS build the mnemonic (even if checksums failed)
+                    // Check if indices are in BIP39 range
+                    let canFormMnemonic = true;
+                    for(let i = 0; i < recoveredWords.length; i++) {
+                        const value = recoveredWords[i];
+                        if (value < 0 || value >= 2048) {
+                            report.errors.generic = `Recovered word #${i + 1} ("${value}") is outside the BIP39 range (0–2047). Cannot form a valid mnemonic.`;
+                            canFormMnemonic = false;
+                            break;
                         }
-                        
+                    }
+                    
+                    if (canFormMnemonic) {
                         const mnemonic = recoveredWords.map((index) => wordlist[index]).join(' ');
                         report.recoveredMnemonic = mnemonic;
+                        report.recoveredIndices = [...recoveredWords];  // Store copy
 
-                        try {
-                            await validateBIP39Mnemonic(mnemonic, wordlist);
-                        } catch (bip39Error) {
-                            report.errors.bip39 = true;
-                            // The mnemonic is structurally valid but fails the BIP39 checksum.
-                            // We keep the mnemonic in the report for the UI to handle this specific case.
+                        // 5. Validate BIP39 ONLY if all Schiavinato checks passed
+                        if (report.errors.failedRows.length === 0 && !report.errors.masterError.failed) {
+                            try {
+                                await validateBIP39Mnemonic(mnemonic, wordlist);
+                            } catch (bip39Error) {
+                                report.errors.bip39 = true;
+                                // Keep the mnemonic even if BIP39 fails - user might need it for brute-forcing
+                            }
                         }
                     }
 
@@ -3569,7 +3690,9 @@ TERMS OF USE & LIABILITY DISCLAIMER:
                 computeMasterCheck,
                 configureEnvironment,
                 getRandomFieldElement, // Expose for the manual helper tool
-                computeLagrangeMultipliers
+                computeLagrangeMultipliers,
+                wipeString, // Expose for UI-side cleanup of sensitive strings
+                secureWipeArray // Expose for UI-side cleanup of sensitive arrays
             };
         })();
 

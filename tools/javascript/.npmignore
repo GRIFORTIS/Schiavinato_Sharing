@@ -1,0 +1,19 @@
+# Source files
+src/
+test/
+
+# Configuration
+tsconfig.json
+vitest.config.ts
+.eslintrc.js
+
+# Development
+*.log
+coverage/
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+

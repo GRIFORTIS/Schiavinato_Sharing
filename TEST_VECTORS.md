@@ -302,4 +302,22 @@ An implementation that wishes to verify reconstruction for this test vector can:
 
 This test vector exercises the same arithmetic and structure used in the full 24-word scheme but in a smaller, easier-to-audit setting.
 
+---
+
+## Security Implementation Note
+
+Implementations of Schiavinato Sharing include security hardening features that are **transparent to test vectors**:
+
+- **Constant-time comparisons**: All checksum validations use constant-time equality checks to prevent timing side-channel attacks
+- **Memory cleanup**: Sensitive data (word indices, polynomials, recovered secrets) is explicitly wiped from memory after use
+
+These security features do not affect:
+- Share generation outputs (shares remain identical)
+- Recovery results (recovered mnemonics remain identical)  
+- Test vector compatibility (all test vectors pass unchanged)
+
+The features work automatically without configuration and enhance security against advanced attack vectors (timing analysis, memory dumps) while maintaining full compatibility with the mathematical specification.
+
+For security implementation details, see [SECURITY.md](./SECURITY.md).
+
 
