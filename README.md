@@ -1,3 +1,15 @@
+This repository has been restructured into focused, professional repositories:
+
+### New Locations:
+- **📄 Specification & Whitepaper**: [schiavinato-sharing-spec](https://github.com/GRIFORTIS/schiavinato-sharing-spec)
+- **📦 JavaScript Library**: [schiavinato-sharing-js](https://github.com/GRIFORTIS/schiavinato-sharing-js) - `npm install @grifortis/schiavinato-sharing`
+- **🐍 Python Library**: [schiavinato-sharing-py](https://github.com/GRIFORTIS/schiavinato-sharing-py) - Coming soon
+- **🏠 Organization Home**: [grifortis](https://github.com/GRIFORTIS/grifortis)
+
+**Please update your bookmarks!** This repository is now archived for historical reference.
+
+
+
 ## Schiavinato Sharing: Human-Executable Secret Sharing for BIP39 Mnemonics
 A Pencil-and-Paper Arithmetic Scheme for Inheritance and Disaster Recovery
 
